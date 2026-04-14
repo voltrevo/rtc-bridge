@@ -2,119 +2,355 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>webrtc-forward demo</title>
+  <title>webrtc-forward</title>
   <style>
-    body { font-family: monospace; max-width: 700px; margin: 2rem auto; padding: 0 1rem; }
-    textarea { width: 100%; height: 8rem; font-family: monospace; font-size: 0.85rem; }
-    button { margin: 0.5rem 0; padding: 0.4rem 1rem; cursor: pointer; }
-    #log { background: #111; color: #0f0; padding: 1rem; height: 14rem; overflow-y: auto;
-           white-space: pre-wrap; font-size: 0.8rem; }
-    #chatbox { display: none; }
-    #messages { background: #f5f5f5; padding: 0.5rem; height: 10rem; overflow-y: auto;
-                white-space: pre-wrap; font-size: 0.85rem; margin-bottom: 0.5rem; }
-    #input-row { display: flex; gap: 0.5rem; }
-    #msgInput { flex: 1; font-family: monospace; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      padding: 12px 20px;
+      background: #1a1d27;
+      border-bottom: 1px solid #2d3148;
+      font-size: 0.9rem;
+      color: #7c85a6;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    header strong { color: #e2e8f0; }
+    #status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #4a5070; flex-shrink: 0;
+      transition: background 0.3s;
+    }
+    #status-dot.connecting { background: #f59e0b; }
+    #status-dot.open       { background: #22c55e; }
+    #status-dot.closed     { background: #ef4444; }
+
+    .layout {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* ── Main panel ── */
+    #main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px;
+      gap: 20px;
+    }
+
+    .step { width: 100%; max-width: 520px; }
+    .step h2 {
+      font-size: 1.1rem;
+      margin-bottom: 6px;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-size: 0.75rem;
+    }
+    .step p { font-size: 0.9rem; color: #94a3b8; margin-bottom: 14px; }
+
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      padding: 10px 20px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: opacity 0.15s;
+    }
+    button:hover { opacity: 0.85; }
+    .btn-primary { background: #6366f1; color: #fff; }
+    .btn-secondary { background: #2d3148; color: #e2e8f0; }
+
+    textarea {
+      width: 100%;
+      height: 120px;
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 6px;
+      color: #e2e8f0;
+      font-family: monospace;
+      font-size: 0.78rem;
+      padding: 10px;
+      resize: vertical;
+      outline: none;
+    }
+    textarea:focus { border-color: #6366f1; }
+
+    .row { display: flex; gap: 8px; margin-top: 8px; }
+
+    /* Chat */
+    #chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      width: 100%;
+      max-width: 520px;
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 6px;
+      padding: 10px;
+      font-family: monospace;
+      font-size: 0.82rem;
+      line-height: 1.6;
+    }
+    .msg-out { color: #818cf8; }
+    .msg-in  { color: #34d399; }
+    #chat-input-row {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+      max-width: 520px;
+    }
+    #chat-input {
+      flex: 1;
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 6px;
+      color: #e2e8f0;
+      padding: 10px 14px;
+      font-size: 0.9rem;
+      outline: none;
+    }
+    #chat-input:focus { border-color: #6366f1; }
+
+    /* ── Log panel ── */
+    #log-panel {
+      width: 280px;
+      flex-shrink: 0;
+      background: #1a1d27;
+      border-left: 1px solid #2d3148;
+      display: flex;
+      flex-direction: column;
+    }
+    #log-panel header {
+      font-size: 0.72rem;
+      color: #7c85a6;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border-bottom: 1px solid #2d3148;
+    }
+    #log-entries {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .log-entry {
+      font-family: monospace;
+      font-size: 0.72rem;
+      line-height: 1.4;
+      color: #64748b;
+    }
+    .log-entry .ts { color: #374151; margin-right: 6px; }
+    .log-entry.info  .msg { color: #94a3b8; }
+    .log-entry.ok    .msg { color: #22c55e; }
+    .log-entry.warn  .msg { color: #f59e0b; }
+    .log-entry.error .msg { color: #ef4444; }
   </style>
 </head>
 <body>
-  <h2>webrtc-forward demo</h2>
 
-  <h3>Step 1 — Create offer</h3>
-  <button id="btnOffer">Create Offer</button>
+<header>
+  <div id="status-dot"></div>
+  <strong>webrtc-forward</strong>
+  <span id="status-text">not connected</span>
+</header>
 
-  <h3>Step 2 — Paste SDP answer from the Go tool</h3>
-  <textarea id="answerIn" placeholder='Paste the JSON answer here...'></textarea>
-  <button id="btnAnswer">Set Answer</button>
+<div class="layout">
+  <!-- Main wizard / chat area -->
+  <div id="main">
 
-  <h3>Step 3 — Your offer (copy this to the Go tool)</h3>
-  <textarea id="offerOut" readonly placeholder='Offer will appear here...'></textarea>
-
-  <h3>Log</h3>
-  <div id="log"></div>
-
-  <div id="chatbox">
-    <h3>Echo chat</h3>
-    <div id="messages"></div>
-    <div id="input-row">
-      <input id="msgInput" type="text" placeholder="Type a message...">
-      <button id="btnSend">Send</button>
+    <!-- Step 1 -->
+    <div class="step" id="step1">
+      <h2>Step 1 of 3 — Create offer</h2>
+      <p>Click below to generate a WebRTC offer. You'll paste it into the terminal running <code>webrtc-forward</code>.</p>
+      <button class="btn-primary" id="btn-create">Create Offer</button>
     </div>
+
+    <!-- Step 2 (hidden) -->
+    <div class="step" id="step2" style="display:none">
+      <h2>Step 2 of 3 — Exchange SDP</h2>
+      <p>Copy the offer below and paste it into the terminal. Then paste the answer the terminal prints back here.</p>
+      <label style="font-size:0.8rem;color:#64748b">Your offer — copy this to the terminal:</label>
+      <textarea id="offer-out" readonly></textarea>
+      <div class="row">
+        <button class="btn-secondary" id="btn-copy">Copy offer</button>
+      </div>
+      <br>
+      <label style="font-size:0.8rem;color:#64748b">Paste the answer from the terminal:</label>
+      <textarea id="answer-in" placeholder='{"type":"answer","sdp":"…"}'></textarea>
+      <div class="row">
+        <button class="btn-primary" id="btn-connect">Connect</button>
+      </div>
+    </div>
+
+    <!-- Step 3: chat (hidden) -->
+    <div id="step3" style="display:none;flex:1;width:100%;max-width:520px;display:none;flex-direction:column;gap:10px">
+      <div id="chat-messages"></div>
+      <div id="chat-input-row">
+        <input id="chat-input" type="text" placeholder="Type a message and press Enter…" autocomplete="off">
+        <button class="btn-primary" id="btn-send">Send</button>
+      </div>
+    </div>
+
   </div>
 
-  <script>
-    const log = (...args) => {
-      const el = document.getElementById('log');
-      el.textContent += args.join(' ') + '\n';
-      el.scrollTop = el.scrollHeight;
-    };
+  <!-- Log panel -->
+  <div id="log-panel">
+    <header>Event log</header>
+    <div id="log-entries"></div>
+  </div>
+</div>
 
-    let pc, dc;
+<script>
+  // ── Logging ────────────────────────────────────────────────────────────────
+  function log(msg, level = 'info') {
+    const el = document.getElementById('log-entries');
+    const entry = document.createElement('div');
+    entry.className = 'log-entry ' + level;
+    const ts = new Date().toTimeString().slice(0, 8);
+    entry.innerHTML = `<span class="ts">${ts}</span><span class="msg">${msg}</span>`;
+    el.appendChild(entry);
+    el.scrollTop = el.scrollHeight;
+  }
 
-    document.getElementById('btnOffer').onclick = async () => {
-      pc = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-      });
+  function setStatus(state, text) {
+    document.getElementById('status-dot').className = state;
+    document.getElementById('status-text').textContent = text;
+  }
 
-      dc = pc.createDataChannel('forward', { ordered: true });
-      setupDataChannel(dc);
-
-      pc.onicecandidate = e => {
-        if (!e.candidate) {
-          // All candidates gathered — show the complete offer.
-          document.getElementById('offerOut').value =
-            JSON.stringify(pc.localDescription);
-          log('Offer ready — copy it to the Go tool.');
+  function showStep(n) {
+    ['step1','step2','step3'].forEach((id, i) => {
+      const el = document.getElementById(id);
+      const show = i + 1 === n;
+      if (id === 'step3') {
+        el.style.display = show ? 'flex' : 'none';
+        if (show) {
+          el.style.flexDirection = 'column';
+          el.style.flex = '1';
+          el.style.width = '100%';
         }
-      };
+      } else {
+        el.style.display = show ? 'block' : 'none';
+      }
+    });
+    // When chat shows, main should justify to start, not center
+    document.getElementById('main').style.justifyContent = n === 3 ? 'flex-start' : 'center';
+  }
 
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      log('Creating offer, gathering ICE candidates...');
-    };
+  // ── WebRTC ─────────────────────────────────────────────────────────────────
+  let pc, dc;
 
-    document.getElementById('btnAnswer').onclick = async () => {
-      const raw = document.getElementById('answerIn').value.trim();
-      if (!raw) { log('Paste the answer first.'); return; }
-      try {
-        const answer = JSON.parse(raw);
-        await pc.setRemoteDescription(answer);
-        log('Remote description set. Waiting for data channel...');
-      } catch (e) {
-        log('Error parsing answer:', e.message);
+  document.getElementById('btn-create').onclick = async () => {
+    log('Creating peer connection…');
+    pc = new RTCPeerConnection({
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+    });
+
+    dc = pc.createDataChannel('forward', { ordered: true });
+    setupDC(dc);
+
+    pc.onicecandidate = e => {
+      if (!e.candidate) {
+        document.getElementById('offer-out').value = JSON.stringify(pc.localDescription);
+        log('Offer ready — copy it to the terminal', 'ok');
+        showStep(2);
       }
     };
-
-    function setupDataChannel(channel) {
-      channel.onopen = () => {
-        log('Data channel OPEN');
-        document.getElementById('chatbox').style.display = 'block';
-      };
-      channel.onclose = () => log('Data channel CLOSED');
-      channel.onerror = e => log('Data channel error:', e.error?.message ?? e);
-      channel.onmessage = e => {
-        const msgs = document.getElementById('messages');
-        const text = e.data instanceof ArrayBuffer
-          ? new TextDecoder().decode(e.data)
-          : e.data;
-        msgs.textContent += '← ' + text + '\n';
-        msgs.scrollTop = msgs.scrollHeight;
-      };
-    }
-
-    document.getElementById('btnSend').onclick = () => {
-      const input = document.getElementById('msgInput');
-      const text = input.value;
-      if (!text || !dc || dc.readyState !== 'open') return;
-      dc.send(text + '\n');
-      const msgs = document.getElementById('messages');
-      msgs.textContent += '→ ' + text + '\n';
-      msgs.scrollTop = msgs.scrollHeight;
-      input.value = '';
+    pc.onconnectionstatechange = () => {
+      const s = pc.connectionState;
+      log('Connection state: ' + s, s === 'connected' ? 'ok' : s === 'failed' ? 'error' : 'info');
+      if (s === 'connected') setStatus('open', 'connected');
+      if (s === 'disconnected' || s === 'failed') setStatus('closed', s);
     };
 
-    document.getElementById('msgInput').addEventListener('keydown', e => {
-      if (e.key === 'Enter') document.getElementById('btnSend').click();
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    log('Gathering ICE candidates…');
+    setStatus('connecting', 'gathering ICE…');
+  };
+
+  document.getElementById('btn-copy').onclick = () => {
+    const ta = document.getElementById('offer-out');
+    navigator.clipboard.writeText(ta.value).then(() => {
+      const btn = document.getElementById('btn-copy');
+      btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = 'Copy offer', 1500);
+      log('Offer copied to clipboard');
     });
-  </script>
+  };
+
+  document.getElementById('btn-connect').onclick = async () => {
+    const raw = document.getElementById('answer-in').value.trim();
+    if (!raw) { log('Paste the answer first', 'warn'); return; }
+    try {
+      const answer = JSON.parse(raw);
+      await pc.setRemoteDescription(answer);
+      log('Remote description set — waiting for data channel…');
+      setStatus('connecting', 'connecting…');
+    } catch (e) {
+      log('Bad answer JSON: ' + e.message, 'error');
+    }
+  };
+
+  function setupDC(channel) {
+    channel.onopen = () => {
+      log('Data channel open', 'ok');
+      setStatus('open', 'connected');
+      showStep(3);
+      document.getElementById('chat-input').focus();
+    };
+    channel.onclose = () => {
+      log('Data channel closed', 'warn');
+      setStatus('closed', 'disconnected');
+    };
+    channel.onerror = e => log('Data channel error: ' + (e.error?.message ?? e), 'error');
+    channel.onmessage = e => {
+      const text = e.data instanceof ArrayBuffer
+        ? new TextDecoder().decode(e.data)
+        : e.data;
+      const msgs = document.getElementById('chat-messages');
+      const line = document.createElement('div');
+      line.className = 'msg-in';
+      line.textContent = '← ' + text.replace(/\r?\n$/, '');
+      msgs.appendChild(line);
+      msgs.scrollTop = msgs.scrollHeight;
+    };
+  }
+
+  // ── Chat ───────────────────────────────────────────────────────────────────
+  function sendMsg() {
+    const input = document.getElementById('chat-input');
+    const text = input.value.trim();
+    if (!text || !dc || dc.readyState !== 'open') return;
+    dc.send(text + '\n');
+    const msgs = document.getElementById('chat-messages');
+    const line = document.createElement('div');
+    line.className = 'msg-out';
+    line.textContent = '→ ' + text;
+    msgs.appendChild(line);
+    msgs.scrollTop = msgs.scrollHeight;
+    input.value = '';
+  }
+
+  document.getElementById('btn-send').onclick = sendMsg;
+  document.getElementById('chat-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') sendMsg();
+  });
+</script>
 </body>
 </html>
