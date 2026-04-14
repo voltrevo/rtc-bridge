@@ -3,6 +3,11 @@ module webrtc-forward
 go 1.22.2
 
 require (
+	barney.ci/go-json5 v0.0.0-20220111181829-468be6ac886c
+	github.com/pion/webrtc/v3 v3.3.6
+)
+
+require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/google/uuid v1.3.1 // indirect
 	github.com/pion/datachannel v1.5.8 // indirect
@@ -20,7 +25,6 @@ require (
 	github.com/pion/stun v0.6.1 // indirect
 	github.com/pion/transport/v2 v2.2.10 // indirect
 	github.com/pion/turn/v2 v2.1.6 // indirect
-	github.com/pion/webrtc/v3 v3.3.6 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/stretchr/testify v1.9.0 // indirect
 	github.com/wlynxg/anet v0.0.3 // indirect

@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
-	"github.com/yosuke-furukawa/json5/encoding/json5"
+	"barney.ci/go-json5"
 )
 
 // Config is the validated configuration for webrtc-forward.
@@ -30,9 +33,13 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("cannot read config file %q: %w", path, err)
 	}
 
-	// Parse to a raw map for strict key validation.
+	// Translate JSON5 → JSON, then parse to a raw map for strict key validation.
+	jsonBytes, err := io.ReadAll(json5.NewReader(bytes.NewReader(data)))
+	if err != nil {
+		return nil, fmt.Errorf("config parse error: %w", err)
+	}
 	var raw map[string]interface{}
-	if err := json5.Unmarshal(data, &raw); err != nil {
+	if err := json.Unmarshal(jsonBytes, &raw); err != nil {
 		return nil, fmt.Errorf("config parse error: %w", err)
 	}
 
@@ -153,10 +160,13 @@ const SampleConfig = `{
   // TCP address to forward WebRTC data channel traffic to.
   target: "127.0.0.1:7777",
 
-  // signaling.type: "stdin" - interactive copy-paste (no extra ports needed).
-  // signaling.type: "http"  - serves POST /offer; also set signaling.addr.
   signaling: {
+    // "stdin" — interactive copy-paste in the terminal (no extra ports needed).
+    // "http"  — serves POST /offer for automated / CLI-client use.
     type: "stdin",
+
+    // Uncomment and set addr when type is "http":
+    // addr: "127.0.0.1:8765",
   },
 }
 `

@@ -9,14 +9,17 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/yosuke-furukawa/json5/encoding/json5"
+	"barney.ci/go-json5"
 )
 
 func main() {
@@ -93,8 +96,12 @@ func loadConfig(path string) (string, error) {
 		return "", fmt.Errorf("cannot read config file %q: %w", path, err)
 	}
 
+	jsonBytes, err := io.ReadAll(json5.NewReader(bytes.NewReader(data)))
+	if err != nil {
+		return "", fmt.Errorf("config parse error: %w", err)
+	}
 	var raw map[string]interface{}
-	if err := json5.Unmarshal(data, &raw); err != nil {
+	if err := json.Unmarshal(jsonBytes, &raw); err != nil {
 		return "", fmt.Errorf("config parse error: %w", err)
 	}
 
