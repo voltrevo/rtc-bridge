@@ -177,7 +177,10 @@
     <!-- Step 1 -->
     <div class="step" id="step1">
       <h2>Step 1 of 4 — Create offer</h2>
-      <p>Click below to generate a WebRTC offer. You'll paste it into the terminal running <code>webrtc-forward</code>.</p>
+      <p>Optionally enter a service name to connect directly, or leave blank to list and select after connecting.</p>
+      <label style="font-size:0.8rem;color:#64748b">Service name (optional):</label>
+      <input id="service-name" type="text" placeholder="leave blank to list services" autocomplete="off"
+        style="width:100%;background:#1a1d27;border:1px solid #2d3148;border-radius:6px;color:#e2e8f0;padding:10px 14px;font-size:0.9rem;outline:none;margin-top:4px;margin-bottom:12px;">
       <button class="btn-primary" id="btn-create">Create Offer</button>
     </div>
 
@@ -259,9 +262,10 @@
   }
 
   // ── WebRTC ─────────────────────────────────────────────────────────────────
-  let pc, dc, handshakeDone;
+  let pc, dc, initialService;
 
   document.getElementById('btn-create').onclick = async () => {
+    initialService = document.getElementById('service-name').value.trim();
     log('Creating peer connection…');
     pc = new RTCPeerConnection({
       iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
@@ -320,9 +324,16 @@
     dcState = 'listing';
 
     channel.onopen = () => {
-      log('Data channel open — fetching services…', 'ok');
-      setStatus('connecting', 'listing services…');
-      channel.send('list');
+      if (initialService) {
+        log(`Data channel open — connecting to "${initialService}"…`, 'ok');
+        setStatus('connecting', 'connecting…');
+        dcState = 'selecting';
+        channel.send(initialService);
+      } else {
+        log('Data channel open — fetching services…', 'ok');
+        setStatus('connecting', 'listing services…');
+        channel.send('list');
+      }
     };
     channel.onclose = () => {
       log('Data channel closed', 'warn');
