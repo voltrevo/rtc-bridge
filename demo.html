@@ -124,7 +124,6 @@
       outline: none;
     }
     #chat-input:focus { border-color: #6366f1; }
-    #service-name:focus { border-color: #6366f1; }
 
     /* ── Log panel ── */
     #log-panel {
@@ -177,17 +176,14 @@
 
     <!-- Step 1 -->
     <div class="step" id="step1">
-      <h2>Step 1 of 3 — Create offer</h2>
-      <p>Enter the service name you want to connect to, then generate a WebRTC offer to paste into the terminal.</p>
-      <label style="font-size:0.8rem;color:#64748b">Service name:</label>
-      <input id="service-name" type="text" placeholder="e.g. echo" autocomplete="off"
-        style="width:100%;background:#1a1d27;border:1px solid #2d3148;border-radius:6px;color:#e2e8f0;padding:10px 14px;font-size:0.9rem;outline:none;margin-bottom:12px;margin-top:4px;">
+      <h2>Step 1 of 4 — Create offer</h2>
+      <p>Click below to generate a WebRTC offer. You'll paste it into the terminal running <code>webrtc-forward</code>.</p>
       <button class="btn-primary" id="btn-create">Create Offer</button>
     </div>
 
     <!-- Step 2 (hidden) -->
     <div class="step" id="step2" style="display:none">
-      <h2>Step 2 of 3 — Exchange SDP</h2>
+      <h2>Step 2 of 4 — Exchange SDP</h2>
       <p>Copy the offer below and paste it into the terminal. Then paste the answer the terminal prints back here.</p>
       <label style="font-size:0.8rem;color:#64748b">Your offer — copy this to the terminal:</label>
       <textarea id="offer-out" readonly></textarea>
@@ -202,8 +198,15 @@
       </div>
     </div>
 
-    <!-- Step 3: chat (hidden) -->
-    <div id="step3" style="display:none;flex:1;width:100%;max-width:520px;display:none;flex-direction:column;gap:10px">
+    <!-- Step 3: select service (hidden) -->
+    <div class="step" id="step3" style="display:none">
+      <h2>Step 3 of 4 — Select service</h2>
+      <p>Choose a service to connect to:</p>
+      <div id="service-chips" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px"></div>
+    </div>
+
+    <!-- Step 4: chat (hidden) -->
+    <div id="step4" style="display:none;flex:1;width:100%;max-width:520px;flex-direction:column;gap:10px">
       <div id="chat-messages"></div>
       <div id="chat-input-row">
         <input id="chat-input" type="text" placeholder="Type a message and press Enter…" autocomplete="off">
@@ -238,10 +241,10 @@
   }
 
   function showStep(n) {
-    ['step1','step2','step3'].forEach((id, i) => {
+    ['step1','step2','step3','step4'].forEach((id, i) => {
       const el = document.getElementById(id);
       const show = i + 1 === n;
-      if (id === 'step3') {
+      if (id === 'step4') {
         el.style.display = show ? 'flex' : 'none';
         if (show) {
           el.style.flexDirection = 'column';
@@ -252,16 +255,13 @@
         el.style.display = show ? 'block' : 'none';
       }
     });
-    // When chat shows, main should justify to start, not center
-    document.getElementById('main').style.justifyContent = n === 3 ? 'flex-start' : 'center';
+    document.getElementById('main').style.justifyContent = n === 4 ? 'flex-start' : 'center';
   }
 
   // ── WebRTC ─────────────────────────────────────────────────────────────────
-  let pc, dc, serviceName, handshakeDone;
+  let pc, dc, handshakeDone;
 
   document.getElementById('btn-create').onclick = async () => {
-    serviceName = document.getElementById('service-name').value.trim();
-    if (!serviceName) { log('Enter a service name first', 'warn'); return; }
     log('Creating peer connection…');
     pc = new RTCPeerConnection({
       iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
@@ -313,13 +313,16 @@
     }
   };
 
+  // State machine: 'listing' → 'selecting' → 'ready'
+  let dcState;
+
   function setupDC(channel) {
-    handshakeDone = false;
+    dcState = 'listing';
 
     channel.onopen = () => {
-      log(`Data channel open — requesting service "${serviceName}"…`, 'ok');
-      setStatus('connecting', 'handshaking…');
-      channel.send(serviceName);
+      log('Data channel open — fetching services…', 'ok');
+      setStatus('connecting', 'listing services…');
+      channel.send('list');
     };
     channel.onclose = () => {
       log('Data channel closed', 'warn');
@@ -327,29 +330,59 @@
     };
     channel.onerror = e => log('Data channel error: ' + (e.error?.message ?? e), 'error');
     channel.onmessage = e => {
-      const text = e.data instanceof ArrayBuffer
+      const raw = e.data instanceof ArrayBuffer
         ? new TextDecoder().decode(e.data)
         : e.data;
 
-      if (!handshakeDone) {
-        if (text === 'ok') {
-          handshakeDone = true;
-          log(`Service "${serviceName}" connected`, 'ok');
+      if (dcState === 'listing') {
+        // Expect JSON array of service names.
+        let names;
+        try { names = JSON.parse(raw); } catch (_) { names = []; }
+        dcState = 'selecting';
+        const chips = document.getElementById('service-chips');
+        chips.innerHTML = '';
+        if (names.length === 0) {
+          chips.innerHTML = '<span style="color:#64748b;font-size:0.85rem">No services configured.</span>';
+        } else {
+          names.forEach(name => {
+            const btn = document.createElement('button');
+            btn.className = 'btn-secondary';
+            btn.textContent = name;
+            btn.onclick = () => {
+              log(`Connecting to "${name}"…`);
+              setStatus('connecting', 'connecting…');
+              channel.send(name);
+            };
+            chips.appendChild(btn);
+          });
+        }
+        log('Services: ' + (names.join(', ') || 'none'), names.length ? 'ok' : 'warn');
+        showStep(3);
+        return;
+      }
+
+      if (dcState === 'selecting') {
+        // Expect "ok" or "err: ..."
+        if (raw === 'ok') {
+          dcState = 'ready';
+          log('Connected', 'ok');
           setStatus('open', 'connected');
-          showStep(3);
+          showStep(4);
           document.getElementById('chat-input').focus();
         } else {
-          log('Handshake failed: ' + text, 'error');
+          log('Connect failed: ' + raw, 'error');
           setStatus('closed', 'error');
-          channel.close();
+          // Re-enable chips for retry.
+          document.querySelectorAll('#service-chips button').forEach(b => b.disabled = false);
         }
         return;
       }
 
+      // dcState === 'ready': normal chat message.
       const msgs = document.getElementById('chat-messages');
       const line = document.createElement('div');
       line.className = 'msg-in';
-      line.textContent = '← ' + text.replace(/\r?\n$/, '');
+      line.textContent = '← ' + raw.replace(/\r?\n$/, '');
       msgs.appendChild(line);
       msgs.scrollTop = msgs.scrollHeight;
     };

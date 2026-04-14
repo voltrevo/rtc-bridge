@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/pion/webrtc/v3"
@@ -186,12 +187,29 @@ func handleOffer(offer webrtc.SessionDescription, services map[string]string) (*
 		dc.OnError(func(e error) { fmt.Printf("[dc] error: %v\n", e) })
 
 		dc.OnOpen(func() {
-			// First message is the service name.
-			svcBytes, ok := <-buf
+			// First message: "list" returns service names; anything else is a service name.
+			firstMsg, ok := <-buf
 			if !ok {
-				return // channel closed before handshake
+				return
 			}
-			svcName := string(svcBytes)
+			var svcName string
+			if string(firstMsg) == "list" {
+				names := make([]string, 0, len(services))
+				for k := range services {
+					names = append(names, k)
+				}
+				sort.Strings(names)
+				listJSON, _ := json.Marshal(names)
+				dc.Send(listJSON)
+				// Now wait for the service name.
+				svcBytes, ok := <-buf
+				if !ok {
+					return
+				}
+				svcName = string(svcBytes)
+			} else {
+				svcName = string(firstMsg)
+			}
 			target, exists := services[svcName]
 			if !exists {
 				dc.SendText(fmt.Sprintf("err: unknown service %q", svcName))
