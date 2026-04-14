@@ -15,7 +15,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"sort"
 	"strings"
 
 	"github.com/pion/webrtc/v3"
@@ -90,22 +89,6 @@ func cmdInit(args []string) {
 func runHTTPSignaling(addr string, services map[string]string) {
 	fmt.Printf("signaling: http %s\n", addr)
 
-	// GET /services — returns sorted list of configured service names.
-	http.HandleFunc("/services", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "GET only", http.StatusMethodNotAllowed)
-			return
-		}
-		names := make([]string, 0, len(services))
-		for k := range services {
-			names = append(names, k)
-		}
-		sort.Strings(names)
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		json.NewEncoder(w).Encode(names)
-	})
-
 	http.HandleFunc("/offer", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "POST only", http.StatusMethodNotAllowed)
@@ -131,7 +114,6 @@ func runHTTPSignaling(addr string, services map[string]string) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
 		json.NewEncoder(w).Encode(answer)
 	})
 	if err := http.ListenAndServe(addr, nil); err != nil {
