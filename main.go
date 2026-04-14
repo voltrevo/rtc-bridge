@@ -76,26 +76,32 @@ func runHTTPSignaling(addr, target string) {
 	}
 }
 
-// runStdin reads an SDP offer from stdin and prints the answer.
+// runStdin loops reading SDP offers from stdin and printing answers.
 func runStdin(target string) {
-	fmt.Println("Paste the SDP offer JSON from the browser, then press Enter twice:")
-	raw, err := readUntilBlank()
-	if err != nil {
-		fatal("reading offer", err)
+	for {
+		fmt.Println("Paste the SDP offer JSON from the browser, then press Enter twice:")
+		raw, err := readUntilBlank()
+		if err != nil {
+			fatal("reading offer", err)
+		}
+		if raw == "" {
+			continue
+		}
+		var offer webrtc.SessionDescription
+		if err := json.Unmarshal([]byte(raw), &offer); err != nil {
+			fmt.Printf("bad offer JSON: %v — try again\n", err)
+			continue
+		}
+		answer, err := handleOffer(offer, target)
+		if err != nil {
+			fmt.Printf("error handling offer: %v — try again\n", err)
+			continue
+		}
+		answerJSON, _ := json.Marshal(answer)
+		fmt.Println("\nPaste this SDP answer into the browser:")
+		fmt.Println(string(answerJSON))
+		fmt.Println()
 	}
-	var offer webrtc.SessionDescription
-	if err := json.Unmarshal([]byte(raw), &offer); err != nil {
-		fatal("parsing offer JSON", err)
-	}
-	answer, err := handleOffer(offer, target)
-	if err != nil {
-		fatal("handling offer", err)
-	}
-	answerJSON, _ := json.Marshal(answer)
-	fmt.Println("\nPaste this SDP answer into the browser:")
-	fmt.Println(string(answerJSON))
-	fmt.Println()
-	select {}
 }
 
 // handleOffer creates a peer connection, sets the offer, creates and returns the answer.
