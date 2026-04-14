@@ -13,10 +13,12 @@ import (
 type MsgType string
 
 const (
-	MsgRegister MsgType = "register"
-	MsgOffer    MsgType = "offer"
-	MsgAnswer   MsgType = "answer"
-	MsgClose    MsgType = "close"
+	MsgHello     MsgType = "hello"
+	MsgChallenge MsgType = "challenge"
+	MsgRegister  MsgType = "register"
+	MsgOffer     MsgType = "offer"
+	MsgAnswer    MsgType = "answer"
+	MsgClose     MsgType = "close"
 )
 
 // Envelope is used to peek at the type field before full decode.
@@ -24,12 +26,29 @@ type Envelope struct {
 	Type MsgType `json:"type"`
 }
 
-// RegisterMsg is the first message sent by a node after connecting.
+// HelloMsg is the first message sent by a node.
+// It commits to r_node before seeing the coordinator's random value.
+type HelloMsg struct {
+	Type       MsgType `json:"type"`
+	NodeID     string  `json:"nodeId"`
+	PublicKey  []byte  `json:"publicKey"`  // raw ed25519 public key (32 bytes)
+	Commitment []byte  `json:"commitment"` // sha256(r_node)
+}
+
+// ChallengeMsg is sent by the coordinator in response to HelloMsg.
+type ChallengeMsg struct {
+	Type   MsgType `json:"type"`
+	RCoord []byte  `json:"rCoord"` // 32 random bytes from coordinator
+}
+
+// RegisterMsg is sent by the node after receiving the challenge.
+// joint = r_node XOR r_coord; proof = Sign(privKey, signPayload(joint))
 type RegisterMsg struct {
 	Type      MsgType         `json:"type"`
 	NodeID    string          `json:"nodeId"`
-	PublicKey []byte          `json:"publicKey"` // raw ed25519 public key (32 bytes)
-	Proof     []byte          `json:"proof"`     // ed25519.Sign(privKey, []byte(nodeId))
+	PublicKey []byte          `json:"publicKey"`
+	RNode     []byte          `json:"rNode"`    // opening of commitment
+	Proof     []byte          `json:"proof"`    // Sign(privKey, signPayload(r_node XOR r_coord))
 	Services  []string        `json:"services"`
 }
 
@@ -64,15 +83,61 @@ func NodeID(pub ed25519.PublicKey) string {
 	return s
 }
 
-// VerifyRegistration checks that the nodeId matches the public key and that
-// the proof is a valid signature of the nodeId bytes.
-func VerifyRegistration(msg *RegisterMsg) bool {
+// signPayload builds the domain-separated payload that the node signs:
+// "webrtc-forward:register:" || joint
+func signPayload(joint []byte) []byte {
+	prefix := []byte("webrtc-forward:register:")
+	payload := make([]byte, len(prefix)+len(joint))
+	copy(payload, prefix)
+	copy(payload[len(prefix):], joint)
+	return payload
+}
+
+// xor32 XORs two 32-byte slices and returns the result.
+func xor32(a, b []byte) []byte {
+	out := make([]byte, 32)
+	for i := range out {
+		out[i] = a[i] ^ b[i]
+	}
+	return out
+}
+
+// SignRegistration produces the proof for a RegisterMsg given r_node and r_coord.
+func SignRegistration(privKey ed25519.PrivateKey, rNode, rCoord []byte) []byte {
+	joint := xor32(rNode, rCoord)
+	return ed25519.Sign(privKey, signPayload(joint))
+}
+
+// VerifyHello checks that the nodeId is consistent with the publicKey.
+func VerifyHello(msg *HelloMsg) bool {
 	pub := ed25519.PublicKey(msg.PublicKey)
 	if len(pub) != ed25519.PublicKeySize {
 		return false
 	}
-	if NodeID(pub) != msg.NodeID {
+	return NodeID(pub) == msg.NodeID
+}
+
+// VerifyRegistration checks the commitment opening and the proof.
+// commitment is from the HelloMsg; rCoord is what the coordinator sent.
+func VerifyRegistration(msg *RegisterMsg, commitment, rCoord []byte) bool {
+	if len(msg.RNode) != 32 || len(rCoord) != 32 {
 		return false
 	}
-	return ed25519.Verify(pub, []byte(msg.NodeID), msg.Proof)
+	// Verify commitment opening.
+	got := sha256.Sum256(msg.RNode)
+	if len(commitment) != 32 {
+		return false
+	}
+	for i := range got {
+		if got[i] != commitment[i] {
+			return false
+		}
+	}
+	// Verify signature over joint random.
+	pub := ed25519.PublicKey(msg.PublicKey)
+	if len(pub) != ed25519.PublicKeySize {
+		return false
+	}
+	joint := xor32(msg.RNode, rCoord)
+	return ed25519.Verify(pub, signPayload(joint), msg.Proof)
 }

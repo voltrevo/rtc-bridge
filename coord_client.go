@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -38,12 +40,39 @@ func connectCoordinator(url string, id *Identity, svcNames []string, services ma
 	}
 	defer conn.Close()
 
-	// Send registration.
+	// Step 1: generate r_node, commit to it, send hello.
+	rNode := make([]byte, 32)
+	if _, err := rand.Read(rNode); err != nil {
+		return fmt.Errorf("rand: %w", err)
+	}
+	commitment := sha256.Sum256(rNode)
+	hello := protocol.HelloMsg{
+		Type:       protocol.MsgHello,
+		NodeID:     id.NodeID,
+		PublicKey:  []byte(id.PubKey),
+		Commitment: commitment[:],
+	}
+	if err := conn.WriteJSON(hello); err != nil {
+		return fmt.Errorf("hello: %w", err)
+	}
+
+	// Step 2: read challenge.
+	_, raw, err := conn.ReadMessage()
+	if err != nil {
+		return fmt.Errorf("read challenge: %w", err)
+	}
+	var chal protocol.ChallengeMsg
+	if err := json.Unmarshal(raw, &chal); err != nil || chal.Type != protocol.MsgChallenge {
+		return fmt.Errorf("expected challenge, got: %s", raw)
+	}
+
+	// Step 3: send register with proof over joint random.
 	reg := protocol.RegisterMsg{
 		Type:      protocol.MsgRegister,
 		NodeID:    id.NodeID,
 		PublicKey: []byte(id.PubKey),
-		Proof:     id.Sign([]byte(id.NodeID)),
+		RNode:     rNode,
+		Proof:     protocol.SignRegistration(id.PrivKey, rNode, chal.RCoord),
 		Services:  svcNames,
 	}
 	if err := conn.WriteJSON(reg); err != nil {

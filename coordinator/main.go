@@ -7,6 +7,7 @@
 package main
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -127,9 +128,37 @@ func (c *coordinator) handleNodeWS(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	// First message must be a register.
 	conn.SetReadDeadline(time.Now().Add(15 * time.Second))
+
+	// Step 1: read hello (commitment).
 	_, raw, err := conn.ReadMessage()
+	if err != nil {
+		return
+	}
+	var hello protocol.HelloMsg
+	if err := json.Unmarshal(raw, &hello); err != nil || hello.Type != protocol.MsgHello {
+		conn.WriteMessage(websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.CloseProtocolError, "expected hello"))
+		return
+	}
+	if !protocol.VerifyHello(&hello) {
+		conn.WriteMessage(websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.CloseProtocolError, "nodeId/publicKey mismatch"))
+		return
+	}
+
+	// Step 2: send challenge (coordinator's random contribution).
+	rCoord := make([]byte, 32)
+	if _, err := rand.Read(rCoord); err != nil {
+		return
+	}
+	challenge := protocol.ChallengeMsg{Type: protocol.MsgChallenge, RCoord: rCoord}
+	if err := conn.WriteJSON(challenge); err != nil {
+		return
+	}
+
+	// Step 3: read register (commitment opening + proof).
+	_, raw, err = conn.ReadMessage()
 	if err != nil {
 		return
 	}
@@ -141,7 +170,7 @@ func (c *coordinator) handleNodeWS(w http.ResponseWriter, r *http.Request) {
 			websocket.FormatCloseMessage(websocket.CloseProtocolError, "expected register"))
 		return
 	}
-	if !protocol.VerifyRegistration(&reg) {
+	if !protocol.VerifyRegistration(&reg, hello.Commitment, rCoord) {
 		conn.WriteMessage(websocket.CloseMessage,
 			websocket.FormatCloseMessage(websocket.CloseProtocolError, "invalid proof"))
 		return
