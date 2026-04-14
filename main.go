@@ -8,6 +8,8 @@ package main
 
 import (
 	"bufio"
+	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -62,15 +64,9 @@ func cmdRun(args []string) {
 		fmt.Fprintln(os.Stderr, "warning: no services configured — all connections will be rejected")
 	}
 
-	// Load or generate node identity (needed for coordinator registration).
-	var id *Identity
+	// Start coordinator connections if configured.
 	if len(cfg.Coordinators) > 0 {
-		var err error
-		id, err = LoadOrCreateIdentity(cfg.KeyFile)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
+		id := IdentityFromPrivKey(cfg.PrivKey)
 		fmt.Printf("node id: %s\n", id.NodeID)
 		for _, coordURL := range cfg.Coordinators {
 			go runCoordinator(coordURL, id, cfg.Services)
@@ -94,11 +90,18 @@ func cmdInit(args []string) {
 		fmt.Fprintf(os.Stderr, "error: %q already exists — delete it first or choose a different path\n", *configPath)
 		os.Exit(1)
 	}
-	if err := os.WriteFile(*configPath, []byte(SampleConfig), 0644); err != nil {
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error generating key: %v\n", err)
+		os.Exit(1)
+	}
+	if err := os.WriteFile(*configPath, []byte(GenerateSampleConfig(priv)), 0600); err != nil {
 		fmt.Fprintf(os.Stderr, "error writing %q: %v\n", *configPath, err)
 		os.Exit(1)
 	}
-	fmt.Printf("wrote sample config to %q\n", *configPath)
+	id := IdentityFromPrivKey(priv)
+	fmt.Printf("wrote config to %q\n", *configPath)
+	fmt.Printf("node id: %s\n", id.NodeID)
 }
 
 // ── Signaling modes ───────────────────────────────────────────────────────────
