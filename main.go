@@ -123,12 +123,17 @@ func runHTTPSignaling(addr string, services map[string]string) {
 
 func runStdin(services map[string]string) {
 	fmt.Println("signaling: stdin")
+	scanner := bufio.NewScanner(os.Stdin)
 	for {
 		fmt.Println("\nPaste the SDP offer JSON from the browser, then press Enter twice:")
-		raw, err := readUntilBlank()
+		raw, eof, err := readUntilBlank(scanner)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "reading stdin: %v\n", err)
 			os.Exit(1)
+		}
+		if eof {
+			fmt.Fprintln(os.Stderr, "stdin closed — exiting")
+			os.Exit(0)
 		}
 		if raw == "" {
 			continue
@@ -257,15 +262,20 @@ func bridge(dc *webrtc.DataChannel, conn net.Conn, buf chan []byte) {
 	}()
 }
 
-func readUntilBlank() (string, error) {
-	scanner := bufio.NewScanner(os.Stdin)
+// readUntilBlank reads lines from scanner until a blank line or EOF.
+// Returns (content, eof, err). eof is true when stdin was closed with no content.
+func readUntilBlank(scanner *bufio.Scanner) (string, bool, error) {
 	var sb strings.Builder
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" && sb.Len() > 0 {
-			break
+			return strings.TrimSpace(sb.String()), false, nil
 		}
 		sb.WriteString(line)
 	}
-	return strings.TrimSpace(sb.String()), scanner.Err()
+	if err := scanner.Err(); err != nil {
+		return "", false, err
+	}
+	// EOF
+	return "", true, nil
 }
