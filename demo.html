@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>webrtc-forward demo</title>
+  <style>
+    body { font-family: monospace; max-width: 700px; margin: 2rem auto; padding: 0 1rem; }
+    textarea { width: 100%; height: 8rem; font-family: monospace; font-size: 0.85rem; }
+    button { margin: 0.5rem 0; padding: 0.4rem 1rem; cursor: pointer; }
+    #log { background: #111; color: #0f0; padding: 1rem; height: 14rem; overflow-y: auto;
+           white-space: pre-wrap; font-size: 0.8rem; }
+    #chatbox { display: none; }
+    #messages { background: #f5f5f5; padding: 0.5rem; height: 10rem; overflow-y: auto;
+                white-space: pre-wrap; font-size: 0.85rem; margin-bottom: 0.5rem; }
+    #input-row { display: flex; gap: 0.5rem; }
+    #msgInput { flex: 1; font-family: monospace; }
+  </style>
+</head>
+<body>
+  <h2>webrtc-forward demo</h2>
+
+  <h3>Step 1 — Create offer</h3>
+  <button id="btnOffer">Create Offer</button>
+
+  <h3>Step 2 — Paste SDP answer from the Go tool</h3>
+  <textarea id="answerIn" placeholder='Paste the JSON answer here...'></textarea>
+  <button id="btnAnswer">Set Answer</button>
+
+  <h3>Step 3 — Your offer (copy this to the Go tool)</h3>
+  <textarea id="offerOut" readonly placeholder='Offer will appear here...'></textarea>
+
+  <h3>Log</h3>
+  <div id="log"></div>
+
+  <div id="chatbox">
+    <h3>Echo chat</h3>
+    <div id="messages"></div>
+    <div id="input-row">
+      <input id="msgInput" type="text" placeholder="Type a message...">
+      <button id="btnSend">Send</button>
+    </div>
+  </div>
+
+  <script>
+    const log = (...args) => {
+      const el = document.getElementById('log');
+      el.textContent += args.join(' ') + '\n';
+      el.scrollTop = el.scrollHeight;
+    };
+
+    let pc, dc;
+
+    document.getElementById('btnOffer').onclick = async () => {
+      pc = new RTCPeerConnection({
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+      });
+
+      dc = pc.createDataChannel('forward', { ordered: true });
+      setupDataChannel(dc);
+
+      pc.onicecandidate = e => {
+        if (!e.candidate) {
+          // All candidates gathered — show the complete offer.
+          document.getElementById('offerOut').value =
+            JSON.stringify(pc.localDescription);
+          log('Offer ready — copy it to the Go tool.');
+        }
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      log('Creating offer, gathering ICE candidates...');
+    };
+
+    document.getElementById('btnAnswer').onclick = async () => {
+      const raw = document.getElementById('answerIn').value.trim();
+      if (!raw) { log('Paste the answer first.'); return; }
+      try {
+        const answer = JSON.parse(raw);
+        await pc.setRemoteDescription(answer);
+        log('Remote description set. Waiting for data channel...');
+      } catch (e) {
+        log('Error parsing answer:', e.message);
+      }
+    };
+
+    function setupDataChannel(channel) {
+      channel.onopen = () => {
+        log('Data channel OPEN');
+        document.getElementById('chatbox').style.display = 'block';
+      };
+      channel.onclose = () => log('Data channel CLOSED');
+      channel.onerror = e => log('Data channel error:', e.error?.message ?? e);
+      channel.onmessage = e => {
+        const msgs = document.getElementById('messages');
+        msgs.textContent += '← ' + e.data + '\n';
+        msgs.scrollTop = msgs.scrollHeight;
+      };
+    }
+
+    document.getElementById('btnSend').onclick = () => {
+      const input = document.getElementById('msgInput');
+      const text = input.value;
+      if (!text || !dc || dc.readyState !== 'open') return;
+      dc.send(text);
+      const msgs = document.getElementById('messages');
+      msgs.textContent += '→ ' + text + '\n';
+      msgs.scrollTop = msgs.scrollHeight;
+      input.value = '';
+    };
+
+    document.getElementById('msgInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('btnSend').click();
+    });
+  </script>
+</body>
+</html>
