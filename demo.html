@@ -93,7 +93,10 @@
       channel.onerror = e => log('Data channel error:', e.error?.message ?? e);
       channel.onmessage = e => {
         const msgs = document.getElementById('messages');
-        msgs.textContent += '← ' + e.data + '\n';
+        const text = e.data instanceof ArrayBuffer
+          ? new TextDecoder().decode(e.data)
+          : e.data;
+        msgs.textContent += '← ' + text + '\n';
         msgs.scrollTop = msgs.scrollHeight;
       };
     }
@@ -102,7 +105,7 @@
       const input = document.getElementById('msgInput');
       const text = input.value;
       if (!text || !dc || dc.readyState !== 'open') return;
-      dc.send(text);
+      dc.send(text + '\n');
       const msgs = document.getElementById('messages');
       msgs.textContent += '→ ' + text + '\n';
       msgs.scrollTop = msgs.scrollHeight;
