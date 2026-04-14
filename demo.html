@@ -124,6 +124,7 @@
       outline: none;
     }
     #chat-input:focus { border-color: #6366f1; }
+    #service-name:focus { border-color: #6366f1; }
 
     /* ── Log panel ── */
     #log-panel {
@@ -177,7 +178,10 @@
     <!-- Step 1 -->
     <div class="step" id="step1">
       <h2>Step 1 of 3 — Create offer</h2>
-      <p>Click below to generate a WebRTC offer. You'll paste it into the terminal running <code>webrtc-forward</code>.</p>
+      <p>Enter the service name you want to connect to, then generate a WebRTC offer to paste into the terminal.</p>
+      <label style="font-size:0.8rem;color:#64748b">Service name:</label>
+      <input id="service-name" type="text" placeholder="e.g. echo" autocomplete="off"
+        style="width:100%;background:#1a1d27;border:1px solid #2d3148;border-radius:6px;color:#e2e8f0;padding:10px 14px;font-size:0.9rem;outline:none;margin-bottom:12px;">
       <button class="btn-primary" id="btn-create">Create Offer</button>
     </div>
 
@@ -253,9 +257,11 @@
   }
 
   // ── WebRTC ─────────────────────────────────────────────────────────────────
-  let pc, dc;
+  let pc, dc, serviceName, handshakeDone;
 
   document.getElementById('btn-create').onclick = async () => {
+    serviceName = document.getElementById('service-name').value.trim();
+    if (!serviceName) { log('Enter a service name first', 'warn'); return; }
     log('Creating peer connection…');
     pc = new RTCPeerConnection({
       iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
@@ -308,11 +314,12 @@
   };
 
   function setupDC(channel) {
+    handshakeDone = false;
+
     channel.onopen = () => {
-      log('Data channel open', 'ok');
-      setStatus('open', 'connected');
-      showStep(3);
-      document.getElementById('chat-input').focus();
+      log(`Data channel open — requesting service "${serviceName}"…`, 'ok');
+      setStatus('connecting', 'handshaking…');
+      channel.send(serviceName);
     };
     channel.onclose = () => {
       log('Data channel closed', 'warn');
@@ -323,6 +330,22 @@
       const text = e.data instanceof ArrayBuffer
         ? new TextDecoder().decode(e.data)
         : e.data;
+
+      if (!handshakeDone) {
+        if (text === 'ok') {
+          handshakeDone = true;
+          log(`Service "${serviceName}" connected`, 'ok');
+          setStatus('open', 'connected');
+          showStep(3);
+          document.getElementById('chat-input').focus();
+        } else {
+          log('Handshake failed: ' + text, 'error');
+          setStatus('closed', 'error');
+          channel.close();
+        }
+        return;
+      }
+
       const msgs = document.getElementById('chat-messages');
       const line = document.createElement('div');
       line.className = 'msg-in';
