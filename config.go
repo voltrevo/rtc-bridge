@@ -13,7 +13,7 @@ import (
 
 // Config is the validated configuration for webrtc-forward.
 type Config struct {
-	Target    string
+	Services  map[string]string // service name → host:port
 	Signaling SignalingConfig
 }
 
@@ -23,7 +23,7 @@ type SignalingConfig struct {
 	Addr string // required when Type == "http"
 }
 
-var allowedTopLevel = []string{"target", "signaling"}
+var allowedTopLevel = []string{"services", "signaling"}
 var allowedSignaling = []string{"type", "addr"}
 
 // LoadConfig reads and strictly validates a JSON5 config file.
@@ -48,21 +48,25 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, err
 	}
 
-	cfg := &Config{}
+	cfg := &Config{Services: make(map[string]string)}
 
-	// ── target ────────────────────────────────────────────────────────────────
-	targetVal, ok := raw["target"]
-	if !ok {
-		return nil, fmt.Errorf(`config: required field "target" is missing`)
+	// ── services ──────────────────────────────────────────────────────────────
+	if svcVal, ok := raw["services"]; ok {
+		svcMap, ok := svcVal.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf(`config: "services" must be an object, got %s`, typeName(svcVal))
+		}
+		for name, val := range svcMap {
+			addr, ok := val.(string)
+			if !ok {
+				return nil, fmt.Errorf(`config: services[%q] must be a string, got %s`, name, typeName(val))
+			}
+			if addr == "" {
+				return nil, fmt.Errorf(`config: services[%q] must not be empty`, name)
+			}
+			cfg.Services[name] = addr
+		}
 	}
-	target, ok := targetVal.(string)
-	if !ok {
-		return nil, fmt.Errorf(`config: "target" must be a string, got %s`, typeName(targetVal))
-	}
-	if target == "" {
-		return nil, fmt.Errorf(`config: "target" must not be empty`)
-	}
-	cfg.Target = target
 
 	// ── signaling ─────────────────────────────────────────────────────────────
 	sigVal, ok := raw["signaling"]
@@ -157,8 +161,11 @@ func typeName(v interface{}) string {
 
 // SampleConfig is the content written by `webrtc-forward init`.
 const SampleConfig = `{
-  // TCP address to forward WebRTC data channel traffic to.
-  target: "127.0.0.1:7777",
+  // Map of service names to TCP host:port targets.
+  // The connecting client sends the service name as its first message.
+  services: {
+    // example: "127.0.0.1:7777",
+  },
 
   signaling: {
     // "stdin" — interactive copy-paste in the terminal (no extra ports needed).

@@ -57,12 +57,14 @@ func cmdRun(args []string) {
 		os.Exit(1)
 	}
 
-	fmt.Printf("target: %s\n", cfg.Target)
+	if len(cfg.Services) == 0 {
+		fmt.Fprintln(os.Stderr, "warning: no services configured — all connections will be rejected")
+	}
 	switch cfg.Signaling.Type {
 	case "http":
-		runHTTPSignaling(cfg.Signaling.Addr, cfg.Target)
+		runHTTPSignaling(cfg.Signaling.Addr, cfg.Services)
 	default:
-		runStdin(cfg.Target)
+		runStdin(cfg.Services)
 	}
 }
 
@@ -84,7 +86,7 @@ func cmdInit(args []string) {
 
 // ── Signaling modes ───────────────────────────────────────────────────────────
 
-func runHTTPSignaling(addr, target string) {
+func runHTTPSignaling(addr string, services map[string]string) {
 	fmt.Printf("signaling: http %s\n", addr)
 	http.HandleFunc("/offer", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -105,7 +107,7 @@ func runHTTPSignaling(addr, target string) {
 			http.Error(w, fmt.Sprintf(`expected type "offer", got %q`, offer.Type), http.StatusBadRequest)
 			return
 		}
-		answer, err := handleOffer(offer, target)
+		answer, err := handleOffer(offer, services)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -119,7 +121,7 @@ func runHTTPSignaling(addr, target string) {
 	}
 }
 
-func runStdin(target string) {
+func runStdin(services map[string]string) {
 	fmt.Println("signaling: stdin")
 	for {
 		fmt.Println("\nPaste the SDP offer JSON from the browser, then press Enter twice:")
@@ -140,7 +142,7 @@ func runStdin(target string) {
 			fmt.Printf("error: expected type \"offer\" but got %q — did you paste the answer instead of the offer? Try again\n", offer.Type)
 			continue
 		}
-		answer, err := handleOffer(offer, target)
+		answer, err := handleOffer(offer, services)
 		if err != nil {
 			fmt.Printf("error handling offer: %v — try again\n", err)
 			continue
@@ -153,7 +155,7 @@ func runStdin(target string) {
 
 // ── WebRTC ────────────────────────────────────────────────────────────────────
 
-func handleOffer(offer webrtc.SessionDescription, target string) (*webrtc.SessionDescription, error) {
+func handleOffer(offer webrtc.SessionDescription, services map[string]string) (*webrtc.SessionDescription, error) {
 	pc, err := webrtc.NewPeerConnection(webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
 			{URLs: []string{"stun:stun.l.google.com:19302"}},
@@ -164,9 +166,7 @@ func handleOffer(offer webrtc.SessionDescription, target string) (*webrtc.Sessio
 	}
 
 	pc.OnDataChannel(func(dc *webrtc.DataChannel) {
-		fmt.Printf("[dc] channel %q — connecting to %s\n", dc.Label(), target)
-
-		// Buffer messages that arrive before the TCP connection is ready.
+		// Buffer all incoming messages (first = service name, rest = TCP data).
 		buf := make(chan []byte, 256)
 		dc.OnMessage(func(msg webrtc.DataChannelMessage) {
 			data := make([]byte, len(msg.Data))
@@ -180,13 +180,27 @@ func handleOffer(offer webrtc.SessionDescription, target string) (*webrtc.Sessio
 		dc.OnError(func(e error) { fmt.Printf("[dc] error: %v\n", e) })
 
 		dc.OnOpen(func() {
-			conn, err := net.Dial("tcp", target)
-			if err != nil {
-				fmt.Printf("[dc] TCP dial failed: %v\n", err)
+			// First message is the service name.
+			svcBytes, ok := <-buf
+			if !ok {
+				return // channel closed before handshake
+			}
+			svcName := string(svcBytes)
+			target, exists := services[svcName]
+			if !exists {
+				dc.SendText(fmt.Sprintf("err: unknown service %q", svcName))
 				dc.Close()
 				return
 			}
-			fmt.Printf("[dc] bridged to %s\n", target)
+			conn, err := net.Dial("tcp", target)
+			if err != nil {
+				fmt.Printf("[dc] TCP dial failed for service %q: %v\n", svcName, err)
+				dc.SendText(fmt.Sprintf("err: dial failed: %v", err))
+				dc.Close()
+				return
+			}
+			dc.SendText("ok")
+			fmt.Printf("[dc] service %q → %s\n", svcName, target)
 			bridge(dc, conn, buf)
 		})
 	})

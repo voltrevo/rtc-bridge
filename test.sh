@@ -41,7 +41,9 @@ echo "    echo server up"
 echo "==> Writing webrtc-forward config"
 cat > "$TMPDIR/config.json5" <<EOF
 {
-  target: "$ECHO_ADDR",
+  services: {
+    echo: "$ECHO_ADDR",
+  },
   signaling: {
     type: "http",
     addr: "$SIGNAL_ADDR",
@@ -55,7 +57,7 @@ wait_port 18765 || { echo "FATAL: signal server not up"; cat "$TMPDIR/forward.lo
 echo "    webrtc-forward up"
 
 echo "==> Running cli-client"
-"$CLIENT" --signal "http://$SIGNAL_ADDR" --messages "hello,ping,goodbye" 2>&1 | tee "$TMPDIR/client.log"
+"$CLIENT" --signal "http://$SIGNAL_ADDR" --service echo --messages "hello,ping,goodbye" 2>&1 | tee "$TMPDIR/client.log"
 
 echo ""
 echo "--- echo log ---"

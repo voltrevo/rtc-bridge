@@ -22,8 +22,14 @@ import (
 
 func main() {
 	signalURL := flag.String("signal", "http://127.0.0.1:8765", "webrtc-forward HTTP signaling URL (base)")
+	service := flag.String("service", "", "service name to request (required)")
 	messages := flag.String("messages", "hello,ping,goodbye", "comma-separated messages to send")
 	flag.Parse()
+
+	if *service == "" {
+		fmt.Fprintln(os.Stderr, "error: --service is required")
+		os.Exit(1)
+	}
 
 	msgs := strings.Split(*messages, ",")
 
@@ -92,6 +98,24 @@ func main() {
 		fmt.Println("[client] data channel open")
 	case <-time.After(15 * time.Second):
 		fmt.Fprintln(os.Stderr, "[client] timeout waiting for data channel")
+		os.Exit(1)
+	}
+
+	// Handshake: send service name, await "ok" or "err: ...".
+	fmt.Printf("[client] requesting service %q\n", *service)
+	if err := dc.SendText(*service); err != nil {
+		fmt.Printf("[client] handshake send error: %v\n", err)
+		os.Exit(1)
+	}
+	select {
+	case ack := <-received:
+		if ack != "ok" {
+			fmt.Fprintf(os.Stderr, "[client] handshake failed: %s\n", ack)
+			os.Exit(1)
+		}
+		fmt.Println("[client] handshake ok")
+	case <-time.After(10 * time.Second):
+		fmt.Fprintln(os.Stderr, "[client] timeout waiting for handshake ack")
 		os.Exit(1)
 	}
 
