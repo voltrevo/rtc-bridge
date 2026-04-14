@@ -17,9 +17,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "==> Starting echo server on $ECHO_ADDR"
-"$ECHO" "$ECHO_ADDR" >"$TMPDIR/echo.log" 2>&1 &
-
 wait_port() {
     local port=$1
     for i in $(seq 1 30); do
@@ -29,14 +26,31 @@ wait_port() {
     return 1
 }
 
-# Wait for echo server to be up.
+echo "==> Writing echo config"
+cat > "$TMPDIR/echo.json5" <<EOF
+{
+  addr: "$ECHO_ADDR",
+}
+EOF
+
+echo "==> Starting echo server on $ECHO_ADDR"
+"$ECHO" run --config "$TMPDIR/echo.json5" >"$TMPDIR/echo.log" 2>&1 &
 wait_port 17777 || { echo "FATAL: echo server not up"; cat "$TMPDIR/echo.log"; exit 1; }
 echo "    echo server up"
 
-echo "==> Starting webrtc-forward (--signal $SIGNAL_ADDR -> $ECHO_ADDR)"
-"$FORWARD" --signal "$SIGNAL_ADDR" "$ECHO_ADDR" >"$TMPDIR/forward.log" 2>&1 &
+echo "==> Writing webrtc-forward config"
+cat > "$TMPDIR/config.json5" <<EOF
+{
+  target: "$ECHO_ADDR",
+  signaling: {
+    type: "http",
+    addr: "$SIGNAL_ADDR",
+  },
+}
+EOF
 
-# Wait for signal server to be up.
+echo "==> Starting webrtc-forward"
+"$FORWARD" run --config "$TMPDIR/config.json5" >"$TMPDIR/forward.log" 2>&1 &
 wait_port 18765 || { echo "FATAL: signal server not up"; cat "$TMPDIR/forward.log"; exit 1; }
 echo "    webrtc-forward up"
 
