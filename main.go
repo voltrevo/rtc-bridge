@@ -92,6 +92,10 @@ func runStdin(target string) {
 			fmt.Printf("bad offer JSON: %v — try again\n", err)
 			continue
 		}
+		if offer.Type != webrtc.SDPTypeOffer {
+			fmt.Printf("expected type \"offer\" but got %q — did you paste the answer instead of the offer? Try again\n", offer.Type)
+			continue
+		}
 		answer, err := handleOffer(offer, target)
 		if err != nil {
 			fmt.Printf("error handling offer: %v — try again\n", err)
