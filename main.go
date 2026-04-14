@@ -61,6 +61,22 @@ func cmdRun(args []string) {
 	if len(cfg.Services) == 0 {
 		fmt.Fprintln(os.Stderr, "warning: no services configured — all connections will be rejected")
 	}
+
+	// Load or generate node identity (needed for coordinator registration).
+	var id *Identity
+	if len(cfg.Coordinators) > 0 {
+		var err error
+		id, err = LoadOrCreateIdentity(cfg.KeyFile)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		fmt.Printf("node id: %s\n", id.NodeID)
+		for _, coordURL := range cfg.Coordinators {
+			go runCoordinator(coordURL, id, cfg.Services)
+		}
+	}
+
 	switch cfg.Signaling.Type {
 	case "http":
 		runHTTPSignaling(cfg.Signaling.Addr, cfg.Services)

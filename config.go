@@ -13,8 +13,10 @@ import (
 
 // Config is the validated configuration for webrtc-forward.
 type Config struct {
-	Services  map[string]string // service name → host:port
-	Signaling SignalingConfig
+	Services     map[string]string // service name → host:port
+	Signaling    SignalingConfig
+	Coordinators []string // WebSocket URLs of coordinators to register with
+	KeyFile      string   // path to ed25519 private key file (default: node.key)
 }
 
 // SignalingConfig describes how SDP offer/answer exchange happens.
@@ -23,7 +25,7 @@ type SignalingConfig struct {
 	Addr string // required when Type == "http"
 }
 
-var allowedTopLevel = []string{"services", "signaling"}
+var allowedTopLevel = []string{"services", "signaling", "coordinators", "keyFile"}
 var allowedSignaling = []string{"type", "addr"}
 
 // LoadConfig reads and strictly validates a JSON5 config file.
@@ -113,6 +115,37 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf(`config: "signaling.addr" is not allowed when signaling.type is %q`, sigType)
 	}
 
+	// ── coordinators ──────────────────────────────────────────────────────────
+	if cVal, ok := raw["coordinators"]; ok {
+		cArr, ok := cVal.([]interface{})
+		if !ok {
+			return nil, fmt.Errorf(`config: "coordinators" must be an array, got %s`, typeName(cVal))
+		}
+		for i, v := range cArr {
+			s, ok := v.(string)
+			if !ok {
+				return nil, fmt.Errorf(`config: coordinators[%d] must be a string, got %s`, i, typeName(v))
+			}
+			if s == "" {
+				return nil, fmt.Errorf(`config: coordinators[%d] must not be empty`, i)
+			}
+			cfg.Coordinators = append(cfg.Coordinators, s)
+		}
+	}
+
+	// ── keyFile ───────────────────────────────────────────────────────────────
+	cfg.KeyFile = "node.key" // default
+	if kVal, ok := raw["keyFile"]; ok {
+		kStr, ok := kVal.(string)
+		if !ok {
+			return nil, fmt.Errorf(`config: "keyFile" must be a string, got %s`, typeName(kVal))
+		}
+		if kStr == "" {
+			return nil, fmt.Errorf(`config: "keyFile" must not be empty`)
+		}
+		cfg.KeyFile = kStr
+	}
+
 	return cfg, nil
 }
 
@@ -162,7 +195,6 @@ func typeName(v interface{}) string {
 // SampleConfig is the content written by `webrtc-forward init`.
 const SampleConfig = `{
   // Map of service names to TCP host:port targets.
-  // The connecting client sends the service name as its first message.
   services: {
     // example: "127.0.0.1:7777",
   },
@@ -175,5 +207,11 @@ const SampleConfig = `{
     // Uncomment and set addr when type is "http":
     // addr: "127.0.0.1:8765",
   },
+
+  // Coordinator WebSocket URLs to register with (optional).
+  // coordinators: ["wss://example.com/ws"],
+
+  // Path to the ed25519 private key file (generated on first run).
+  // keyFile: "node.key",
 }
 `
