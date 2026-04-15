@@ -99,7 +99,10 @@ const landingHTML = `<!DOCTYPE html>
       font-size: 3rem;
       font-weight: 800;
       letter-spacing: -0.06em;
-      color: #58a6ff;
+      background: linear-gradient(135deg, #58a6ff 0%, #a371f7 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
       margin-bottom: 0.4rem;
       user-select: none;
     }
@@ -143,8 +146,6 @@ const landingHTML = `<!DOCTYPE html>
       transition: color 0.4s;
     }
 
-    .card-value.flash { color: #3fb950; }
-
     .card-label {
       font-size: 0.78rem;
       color: #8b949e;
@@ -159,29 +160,6 @@ const landingHTML = `<!DOCTYPE html>
       margin-top: 0.2rem;
     }
 
-    .status-row {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      font-size: 0.78rem;
-      color: #6e7681;
-      margin-bottom: 2.5rem;
-    }
-
-    .dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: #3fb950;
-      animation: breathe 2.5s ease-in-out infinite;
-      flex-shrink: 0;
-    }
-
-    @keyframes breathe {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.45; transform: scale(0.8); }
-    }
-
     .divider {
       width: 100%;
       max-width: 520px;
@@ -192,7 +170,6 @@ const landingHTML = `<!DOCTYPE html>
 
     .description {
       max-width: 520px;
-      text-align: center;
       color: #8b949e;
       font-size: 0.9rem;
       line-height: 1.7;
@@ -268,11 +245,6 @@ const landingHTML = `<!DOCTYPE html>
     </div>
   </div>
 
-  <div class="status-row">
-    <span class="dot"></span>
-    <span id="status">connecting…</span>
-  </div>
-
   <hr class="divider">
 
   <div class="description">
@@ -310,44 +282,20 @@ const landingHTML = `<!DOCTYPE html>
   </table>
 
   <script>
-    const nodesEl = document.getElementById('nodes');
-    const sdpEl   = document.getElementById('sdp');
-    const statusEl = document.getElementById('status');
-
-    function flash(el) {
-      el.classList.add('flash');
-      setTimeout(() => el.classList.remove('flash'), 600);
-    }
-
-    let prevNodes = null, prevSDP = null;
-
-    async function refresh() {
+    (async () => {
       try {
         const r = await fetch('/api/stats');
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const d = await r.json();
-
-        const nodes = d.connectedNodes;
-        const rate  = d.sdpPerHour;
-        const rateStr = rate < 10 ? rate.toFixed(1) : Math.round(rate).toString();
-
-        if (prevNodes !== null && nodes !== prevNodes) flash(nodesEl);
-        if (prevSDP   !== null && rateStr !== prevSDP)  flash(sdpEl);
-
-        nodesEl.textContent = nodes;
-        sdpEl.textContent   = rateStr;
-        prevNodes = nodes;
-        prevSDP   = rateStr;
-
-        const t = new Date().toLocaleTimeString();
-        statusEl.textContent = 'live · updated ' + t;
+        const rate = d.sdpPerHour;
+        document.getElementById('nodes').textContent = d.connectedNodes;
+        document.getElementById('sdp').textContent =
+          rate < 10 ? rate.toFixed(1) : Math.round(rate).toString();
       } catch(e) {
-        statusEl.textContent = 'error: ' + e.message;
+        document.getElementById('nodes').textContent = '?';
+        document.getElementById('sdp').textContent = '?';
       }
-    }
-
-    refresh();
-    setInterval(refresh, 5000);
+    })();
   </script>
 </body>
 </html>
