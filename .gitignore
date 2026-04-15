@@ -1,5 +1,5 @@
 *.json5
-/node/rtc-bridge
+/node/node
 /cli-client/cli-client
 /echo/echo
 /coordinator/coordinator

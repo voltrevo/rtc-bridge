@@ -17,7 +17,7 @@ exchange SDP, then establishes a direct WebRTC connection.
 
 | Binary | Purpose |
 |---|---|
-| `rtc-bridge` (node) | Node that bridges WebRTC data channels to local TCP services |
+| `node` | Node that bridges WebRTC data channels to local TCP services |
 | `coordinator` | Discovery + signaling server |
 | `echo` | Test TCP echo server |
 
@@ -25,7 +25,7 @@ exchange SDP, then establishes a direct WebRTC connection.
 
 ```bash
 # 1. Build
-go build -o node/rtc-bridge ./node
+go build -o node/node ./node
 go build -o coordinator/coordinator ./coordinator
 go build -o echo/echo ./echo
 
@@ -33,9 +33,9 @@ go build -o echo/echo ./echo
 cd coordinator && ./coordinator init && ./coordinator run
 
 # 3. Configure and start a node
-./node/rtc-bridge init   # generates config.json5 with a fresh keypair
+./node/node init   # generates config.json5 with a fresh keypair
 # Edit config.json5: add your service(s) and set the coordinator URL
-./node/rtc-bridge run
+./node/node run
 
 # 4. Open demo.html in a browser
 #    Enter the coordinator URL → fetch services → click a node → chat
@@ -93,7 +93,7 @@ cd coordinator && ./coordinator init && ./coordinator run
 ## Building
 
 ```bash
-go build -o node/rtc-bridge ./node
+go build -o node/node ./node
 go build -o coordinator/coordinator ./coordinator
 go build -o echo/echo ./echo
 ```
