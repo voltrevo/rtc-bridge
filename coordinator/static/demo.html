@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>rtc-mesh demo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d1117;
+      color: #e6edf3;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      padding: 2rem;
+      gap: 1.5rem;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      background: linear-gradient(135deg, #58a6ff 0%, #a371f7 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+
+    input[type=text] {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #e6edf3;
+      font-size: 0.9rem;
+      padding: 0.4rem 0.75rem;
+      width: 280px;
+      outline: none;
+    }
+    input[type=text]:focus { border-color: #58a6ff; }
+
+    button {
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #e6edf3;
+      cursor: pointer;
+      font-size: 0.85rem;
+      padding: 0.4rem 0.9rem;
+      white-space: nowrap;
+    }
+    button:hover { background: #30363d; border-color: #58a6ff66; }
+    button:disabled { opacity: 0.4; cursor: default; }
+    button.primary { background: #1f6feb; border-color: #388bfd; color: #fff; }
+    button.primary:hover { background: #388bfd; }
+    button.danger { border-color: #f8514966; color: #f85149; }
+    button.danger:hover { background: #f8514922; }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 0.82rem;
+      padding: 0.3rem 0.75rem;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .chip:hover { border-color: #58a6ff; background: #1c2128; }
+    .chip.active { border-color: #58a6ff; background: #1c2128; }
+    .chip .svc-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #3fb950;
+    }
+
+    .node-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      min-width: 220px;
+    }
+    .node-id {
+      font-family: 'SF Mono', 'Fira Code', Consolas, monospace;
+      font-size: 0.78rem;
+      color: #8b949e;
+      user-select: all;
+    }
+
+    .section-label {
+      font-size: 0.72rem;
+      color: #6e7681;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      margin-bottom: 0.25rem;
+    }
+
+    .repl {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      min-width: 340px;
+    }
+
+    .repl-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+    .result {
+      font-size: 0.83rem;
+      font-family: 'SF Mono', 'Fira Code', Consolas, monospace;
+      color: #8b949e;
+      min-height: 1.2em;
+    }
+    .result.ok  { color: #3fb950; }
+    .result.err { color: #f85149; }
+
+    .terminal {
+      background: #010409;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 0.75rem;
+      width: 100%;
+      max-width: 600px;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+    .term-log {
+      font-family: 'SF Mono', 'Fira Code', Consolas, monospace;
+      font-size: 0.82rem;
+      min-height: 120px;
+      max-height: 300px;
+      overflow-y: auto;
+      margin-bottom: 0.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
+    .term-line { white-space: pre-wrap; word-break: break-all; }
+    .term-line.sent { color: #58a6ff; }
+    .term-line.recv { color: #e6edf3; }
+    .term-line.info { color: #6e7681; font-style: italic; }
+
+    .term-input-row { display: flex; gap: 0.4rem; }
+    .term-input {
+      flex: 1;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      color: #e6edf3;
+      font-family: 'SF Mono', 'Fira Code', Consolas, monospace;
+      font-size: 0.82rem;
+      padding: 0.3rem 0.6rem;
+      outline: none;
+    }
+    .term-input:focus { border-color: #58a6ff; }
+
+    .err-msg {
+      color: #f85149;
+      font-size: 0.83rem;
+    }
+
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <h1>rtc-mesh demo</h1>
+
+  <!-- Step 1: coordinator URL -->
+  <div class="row" id="step1">
+    <input type="text" id="coord-url" placeholder="coordinator URL">
+    <button class="primary" onclick="fetchNodes()">Connect</button>
+    <span class="err-msg" id="err1"></span>
+  </div>
+
+  <!-- Step 2: node list -->
+  <div id="step2" hidden>
+    <div class="section-label">Nodes</div>
+    <div class="row" id="node-list" style="gap:0.75rem;margin-top:0.4rem"></div>
+  </div>
+
+  <!-- Step 3: connected node REPL -->
+  <div id="step3" hidden>
+    <div class="repl">
+      <div>
+        <div class="section-label">Connected to</div>
+        <div class="node-id" id="connected-id"></div>
+      </div>
+      <div class="repl-actions">
+        <button onclick="doPing()">Ping</button>
+        <button onclick="doList()">List services</button>
+        <button onclick="doVerify()">Verify node</button>
+        <button class="danger" onclick="doDisconnect()">Disconnect</button>
+      </div>
+      <div class="result" id="repl-result"></div>
+      <div>
+        <div class="section-label" style="margin-bottom:0.4rem">Bridge to service</div>
+        <div class="row">
+          <select id="svc-select" style="background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#e6edf3;padding:0.35rem 0.6rem;font-size:0.85rem"></select>
+          <button class="primary" onclick="doBridge()">Bridge</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4: TCP bridge terminal -->
+  <div id="step4" hidden>
+    <div class="terminal">
+      <div class="term-log" id="term-log"></div>
+      <div class="term-input-row">
+        <input class="term-input" id="term-input" placeholder="send…" onkeydown="termKey(event)">
+        <button onclick="termSend()">Send</button>
+        <button class="danger" onclick="doDisconnect()">×</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { Coordinator, connect } from '/rtc-mesh.js';
+
+    // ── State ──────────────────────────────────────────────────────────────
+    let coordinator = null;
+    let channel     = null;
+
+    // ── Step 1: fetch nodes ────────────────────────────────────────────────
+    window.fetchNodes = async () => {
+      const url = document.getElementById('coord-url').value.trim();
+      const err = document.getElementById('err1');
+      err.textContent = '';
+      try {
+        coordinator = new Coordinator(url);
+        const nodes = await coordinator.nodes();
+        renderNodes(nodes);
+        show('step2');
+      } catch(e) {
+        err.textContent = String(e);
+      }
+    };
+
+    function renderNodes(nodes) {
+      const list = document.getElementById('node-list');
+      list.innerHTML = '';
+      if (!nodes || nodes.length === 0) {
+        list.textContent = 'No nodes connected.';
+        return;
+      }
+      for (const n of nodes) {
+        const card = document.createElement('div');
+        card.className = 'node-card';
+        card.innerHTML = `
+          <div class="node-id">${n.nodeId}</div>
+          <div class="row" style="gap:0.3rem"></div>`;
+        const chips = card.querySelector('.row');
+        for (const svc of (n.services || [])) {
+          const chip = document.createElement('span');
+          chip.className = 'chip';
+          chip.innerHTML = `<span class="svc-dot"></span>${svc}`;
+          chip.onclick = () => openChannel(n.nodeId, svc);
+          chips.appendChild(chip);
+        }
+        list.appendChild(card);
+      }
+    }
+
+    // ── Step 3: open channel ───────────────────────────────────────────────
+    window.openChannel = async (nodeId, service) => {
+      setReplResult('Connecting…', '');
+      show('step3');
+      hide('step4');
+      document.getElementById('connected-id').textContent = nodeId;
+      populateServiceSelect(service);
+      try {
+        channel = await connect(coordinator, nodeId, service);
+        setReplResult('Connected', 'ok');
+        channel.dc.addEventListener('close', () => doDisconnect());
+      } catch(e) {
+        setReplResult(String(e), 'err');
+        channel = null;
+      }
+    };
+
+    function populateServiceSelect(selected) {
+      const sel = document.getElementById('svc-select');
+      sel.innerHTML = '';
+      // We only know the one service the user clicked; list() will reveal more
+      addOption(sel, selected);
+    }
+
+    function addOption(sel, svc) {
+      if (![...sel.options].some(o => o.value === svc)) {
+        const o = document.createElement('option');
+        o.value = o.textContent = svc;
+        sel.appendChild(o);
+      }
+    }
+
+    // ── REPL actions ───────────────────────────────────────────────────────
+    window.doPing = async () => {
+      if (!channel) return;
+      setReplResult('…', '');
+      try {
+        const rtt = await channel.ping();
+        setReplResult(`pong  ${rtt} ms`, 'ok');
+      } catch(e) { setReplResult(String(e), 'err'); }
+    };
+
+    window.doList = async () => {
+      if (!channel) return;
+      setReplResult('…', '');
+      try {
+        const svcs = await channel.list();
+        const sel = document.getElementById('svc-select');
+        svcs.forEach(s => addOption(sel, s));
+        setReplResult(svcs.join(', '), 'ok');
+      } catch(e) { setReplResult(String(e), 'err'); }
+    };
+
+    window.doVerify = async () => {
+      if (!channel) return;
+      setReplResult('Verifying…', '');
+      try {
+        const r = await channel.verifyIdentity();
+        if (r.ok) {
+          setReplResult(`✓ verified  ${r.pubkey.slice(0, 16)}…`, 'ok');
+        } else {
+          setReplResult(`✗ ${r.message}`, 'err');
+        }
+      } catch(e) { setReplResult(String(e), 'err'); }
+    };
+
+    window.doBridge = async () => {
+      if (!channel) return;
+      const svc = document.getElementById('svc-select').value;
+      setReplResult(`Bridging to ${svc}…`, '');
+      try {
+        await channel.bridge(svc);
+        setReplResult('', '');
+        startTerminal();
+      } catch(e) { setReplResult(String(e), 'err'); }
+    };
+
+    window.doDisconnect = () => {
+      if (channel) { channel.close(); channel = null; }
+      hide('step3');
+      hide('step4');
+    };
+
+    // ── Terminal (bridge mode) ─────────────────────────────────────────────
+    function startTerminal() {
+      show('step4');
+      hide('step3');
+      const log = document.getElementById('term-log');
+      log.innerHTML = '';
+      termLine('info', '— bridged —');
+
+      channel.dc.addEventListener('message', (e) => {
+        const text = typeof e.data === 'string'
+          ? e.data
+          : new TextDecoder().decode(e.data);
+        termLine('recv', text);
+      });
+
+      document.getElementById('term-input').focus();
+    }
+
+    function termLine(cls, text) {
+      const log = document.getElementById('term-log');
+      const div = document.createElement('div');
+      div.className = `term-line ${cls}`;
+      div.textContent = text;
+      log.appendChild(div);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    window.termKey = (e) => { if (e.key === 'Enter') termSend(); };
+
+    window.termSend = () => {
+      if (!channel) return;
+      const inp = document.getElementById('term-input');
+      const text = inp.value;
+      if (!text) return;
+      inp.value = '';
+      termLine('sent', text);
+      channel.dc.send(text);
+    };
+
+    // ── Helpers ────────────────────────────────────────────────────────────
+    function show(id) { document.getElementById(id).hidden = false; }
+    function hide(id) { document.getElementById(id).hidden = true; }
+
+    function setReplResult(text, cls) {
+      const el = document.getElementById('repl-result');
+      el.textContent = text;
+      el.className = 'result' + (cls ? ' ' + cls : '');
+    }
+
+    // Set default coordinator URL from current host
+    document.getElementById('coord-url').value =
+      location.protocol + '//' + location.hostname + ':8765';
+  </script>
+</body>
+</html>

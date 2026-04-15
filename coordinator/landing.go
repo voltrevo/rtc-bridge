@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"math"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 )
@@ -61,6 +62,20 @@ func (c *coordinator) handleStats(w http.ResponseWriter, r *http.Request) {
 		ConnectedNodes: nodeCount,
 		SDPPerHour:     c.sdp.perHour(),
 	})
+}
+
+// serveStatic returns a handler that reads a file from disk on each request.
+// path is relative to the coordinator's working directory.
+func serveStatic(path, contentType string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			http.Error(w, "not found (run: cd client && npm run build)", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", contentType)
+		w.Write(data)
+	}
 }
 
 // handleLanding serves the HTML landing page.

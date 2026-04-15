@@ -5,3 +5,8 @@
 /coordinator/coordinator
 /webrtc-forward
 /rtc-mesh
+
+# client build output
+/client/node_modules/
+/coordinator/static/rtc-mesh.js
+/coordinator/static/rtc-mesh.js.map
