@@ -282,25 +282,43 @@
     }
 
     // ── Step 3: open channel ───────────────────────────────────────────────
+    async function connectNode(nodeId, service) {
+      try {
+        channel = await connect(coordinator, nodeId, service);
+        channel.dc.addEventListener('close', () => doDisconnect());
+        return true;
+      } catch(e) {
+        channel = null;
+        return String(e);
+      }
+    }
+
     window.openChannel = async (nodeId, service) => {
       setReplResult('Connecting…', '');
       show('step3');
       hide('step4');
       document.getElementById('connected-id').textContent = nodeId;
       populateServiceSelect(service);
-      try {
-        channel = await connect(coordinator, nodeId, service);
+      const result = await connectNode(nodeId, service);
+      if (result === true) {
         setReplResult('Connected', 'ok');
-        channel.dc.addEventListener('close', () => doDisconnect());
-      } catch(e) {
-        setReplResult(String(e), 'err');
-        channel = null;
+      } else {
+        setReplResult(result, 'err');
       }
     };
 
     window.openAndBridge = async (nodeId, service) => {
-      await openChannel(nodeId, service);
-      if (channel) await doBridge(service);
+      const result = await connectNode(nodeId, service);
+      if (result === true) {
+        await doBridge(service);
+      } else {
+        // Connection failed — fall back to REPL to show error
+        setReplResult(result, 'err');
+        show('step3');
+        hide('step4');
+        document.getElementById('connected-id').textContent = nodeId;
+        populateServiceSelect(service);
+      }
     };
 
     function populateServiceSelect(selected) {
