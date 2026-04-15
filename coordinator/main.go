@@ -222,12 +222,15 @@ func (c *coordinator) handleNodeWS(w http.ResponseWriter, r *http.Request) {
 	defer c.unregisterNode(n.id)
 	fmt.Printf("[node] registered %s services=%v\n", n.id, n.services)
 
-	// Set up pong handler to update lastSeen.
-	conn.SetPongHandler(func(string) error {
+	// Nodes send WS pings every ~60s. Handle them explicitly so we can
+	// extend the read deadline and update lastSeen; also send the pong
+	// since we're replacing gorilla's default ping handler.
+	conn.SetPingHandler(func(appData string) error {
 		n.mu.Lock()
 		n.lastSeen = time.Now()
 		n.mu.Unlock()
-		return nil
+		conn.SetReadDeadline(time.Now().Add(nodeDropAfter))
+		return conn.WriteControl(websocket.PongMessage, []byte(appData), time.Now().Add(5*time.Second))
 	})
 
 	// Read loop.
