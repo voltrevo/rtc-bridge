@@ -89,49 +89,6 @@
     .btn-primary   { background: #6366f1; color: #fff; }
     .btn-secondary { background: #2d3148; color: #e2e8f0; }
 
-    /* Mode tabs */
-    .mode-tabs {
-      display: flex;
-      gap: 4px;
-      margin-bottom: 20px;
-      background: #1a1d27;
-      border-radius: 8px;
-      padding: 4px;
-      width: 100%;
-      max-width: 520px;
-    }
-    .mode-tab {
-      flex: 1;
-      padding: 8px 12px;
-      border-radius: 6px;
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: #64748b;
-      background: transparent;
-      cursor: pointer;
-      border: none;
-      transition: background 0.15s, color 0.15s;
-    }
-    .mode-tab.active { background: #2d3148; color: #e2e8f0; }
-
-    textarea {
-      width: 100%;
-      height: 120px;
-      background: #1a1d27;
-      border: 1px solid #2d3148;
-      border-radius: 6px;
-      color: #e2e8f0;
-      font-family: monospace;
-      font-size: 0.78rem;
-      padding: 10px;
-      resize: vertical;
-      outline: none;
-      margin-bottom: 8px;
-    }
-    textarea:focus { border-color: #6366f1; }
-
-    .row { display: flex; gap: 8px; margin-top: 8px; }
-
     /* Service chips */
     .chips {
       display: flex;
@@ -221,62 +178,25 @@
 </header>
 
 <div class="layout">
-  <!-- Main wizard / chat area -->
   <div id="main">
 
-    <!-- Mode tabs (shown before connecting) -->
-    <div class="mode-tabs" id="mode-tabs">
-      <button class="mode-tab active" id="tab-coord" onclick="setMode('coord')">Via Coordinator</button>
-      <button class="mode-tab" id="tab-manual" onclick="setMode('manual')">Manual (copy-paste)</button>
-    </div>
-
-    <!-- ── Coordinator mode ── -->
-    <div class="step" id="coord-step1">
-      <h2>Step 1 — Fetch services</h2>
+    <!-- Step 1: coordinator URL -->
+    <div class="step" id="step1">
+      <h2>Step 1 — Connect to coordinator</h2>
       <p>Enter the coordinator URL to discover available services.</p>
       <label>Coordinator URL:</label>
       <input id="coord-url" type="text" placeholder="http://localhost:8765" autocomplete="off">
       <button class="btn-primary" id="btn-fetch">Fetch Services</button>
     </div>
 
-    <div class="step" id="coord-step2" style="display:none">
+    <!-- Step 2: select service -->
+    <div class="step" id="step2" style="display:none">
       <h2>Step 2 — Select service</h2>
       <p>Click a service to connect. WebRTC negotiation happens automatically.</p>
-      <div class="chips" id="coord-chips"></div>
+      <div class="chips" id="service-chips"></div>
     </div>
 
-    <!-- ── Manual mode ── -->
-    <div class="step" id="manual-step1" style="display:none">
-      <h2>Step 1 — Create offer</h2>
-      <p>Optionally enter a service name to connect directly, or leave blank to list and select after connecting.</p>
-      <label>Service name (optional):</label>
-      <input id="service-name" type="text" placeholder="leave blank to list services" autocomplete="off">
-      <button class="btn-primary" id="btn-create">Create Offer</button>
-    </div>
-
-    <div class="step" id="manual-step2" style="display:none">
-      <h2>Step 2 — Exchange SDP</h2>
-      <p>Copy the offer below and paste it into the terminal. Then paste the answer the terminal prints back here.</p>
-      <label>Your offer — copy this to the terminal:</label>
-      <textarea id="offer-out" readonly></textarea>
-      <div class="row">
-        <button class="btn-secondary" id="btn-copy">Copy offer</button>
-      </div>
-      <br>
-      <label>Paste the answer from the terminal:</label>
-      <textarea id="answer-in" placeholder='{"type":"answer","sdp":"…"}'></textarea>
-      <div class="row">
-        <button class="btn-primary" id="btn-connect">Connect</button>
-      </div>
-    </div>
-
-    <div class="step" id="manual-step3" style="display:none">
-      <h2>Step 3 — Select service</h2>
-      <p>Choose a service to connect to:</p>
-      <div class="chips" id="manual-chips"></div>
-    </div>
-
-    <!-- ── Chat (shared) ── -->
+    <!-- Chat -->
     <div id="step-chat" style="display:none;flex:1;width:100%;max-width:520px;flex-direction:column;gap:10px">
       <div id="chat-messages"></div>
       <div id="chat-input-row">
@@ -315,102 +235,11 @@
     document.getElementById('status-text').textContent = text;
   }
 
-  // ── Mode tabs ──────────────────────────────────────────────────────────────
-  let mode = 'coord';
-
-  function setMode(m) {
-    mode = m;
-    document.getElementById('tab-coord').classList.toggle('active', m === 'coord');
-    document.getElementById('tab-manual').classList.toggle('active', m === 'manual');
-    document.getElementById('coord-step1').style.display  = m === 'coord'  ? 'block' : 'none';
-    document.getElementById('manual-step1').style.display = m === 'manual' ? 'block' : 'none';
-    // hide other steps
-    ['coord-step2','manual-step2','manual-step3'].forEach(id =>
-      document.getElementById(id).style.display = 'none');
-  }
-
-  // init
-  setMode('coord');
-
-  function showChat() {
-    ['coord-step1','coord-step2','manual-step1','manual-step2','manual-step3']
-      .forEach(id => document.getElementById(id).style.display = 'none');
-    document.getElementById('mode-tabs').style.display = 'none';
-    const chat = document.getElementById('step-chat');
-    chat.style.display = 'flex';
-    chat.style.flexDirection = 'column';
-    chat.style.flex = '1';
-    document.getElementById('main').style.justifyContent = 'flex-start';
-    document.getElementById('chat-input').focus();
-  }
-
-  // ── WebRTC helpers ─────────────────────────────────────────────────────────
+  // ── State ─────────────────────────────────────────────────────────────────
   let pc, dc;
+  let coordServices = {}; // { svcName: [nodeId, ...] }
 
-  function newPC() {
-    pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
-    pc.onconnectionstatechange = () => {
-      const s = pc.connectionState;
-      log('Connection state: ' + s, s === 'connected' ? 'ok' : s === 'failed' ? 'error' : 'info');
-      if (s === 'connected') setStatus('open', 'connected');
-      if (s === 'disconnected' || s === 'failed') setStatus('closed', s);
-    };
-    return pc;
-  }
-
-  // Returns a promise that resolves with the full local description (ICE gathered).
-  async function createOffer() {
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    log('Gathering ICE candidates…');
-    setStatus('connecting', 'gathering ICE…');
-    await new Promise(resolve => {
-      if (pc.iceGatheringState === 'complete') { resolve(); return; }
-      pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === 'complete') resolve(); };
-    });
-    return pc.localDescription;
-  }
-
-  // Waits for the data channel to open (returns a promise).
-  function waitDCOpen(channel) {
-    return new Promise((resolve, reject) => {
-      if (channel.readyState === 'open') { resolve(); return; }
-      channel.onopen = resolve;
-      channel.onerror = e => reject(e.error ?? new Error('DC error'));
-    });
-  }
-
-  // Sends service name, waits for "ok" or rejects on error.
-  function handshake(channel, svcName) {
-    return new Promise((resolve, reject) => {
-      channel.send(svcName);
-      channel.onmessage = e => {
-        const raw = typeof e.data === 'string' ? e.data : new TextDecoder().decode(e.data);
-        if (raw === 'ok') resolve();
-        else reject(new Error(raw));
-      };
-    });
-  }
-
-  // Switches the data channel to chat mode.
-  function activateChat(channel) {
-    channel.onmessage = e => {
-      const raw = typeof e.data === 'string' ? e.data : new TextDecoder().decode(e.data);
-      const msgs = document.getElementById('chat-messages');
-      const line = document.createElement('div');
-      line.className = 'msg-in';
-      line.textContent = '← ' + raw.replace(/\r?\n$/, '');
-      msgs.appendChild(line);
-      msgs.scrollTop = msgs.scrollHeight;
-    };
-    channel.onclose = () => { log('Data channel closed', 'warn'); setStatus('closed', 'disconnected'); };
-    channel.onerror = e => log('Data channel error: ' + (e.error?.message ?? e), 'error');
-  }
-
-  // ── Coordinator mode ───────────────────────────────────────────────────────
-  // coordServices: { svcName: [nodeId, ...], ... }
-  let coordServices = {};
-
+  // ── Step 1: fetch services ─────────────────────────────────────────────────
   document.getElementById('btn-fetch').onclick = async () => {
     const base = document.getElementById('coord-url').value.trim().replace(/\/$/, '');
     if (!base) { log('Enter a coordinator URL', 'warn'); return; }
@@ -422,7 +251,7 @@
       coordServices = await resp.json();
       const names = Object.keys(coordServices).sort();
       log('Services: ' + (names.join(', ') || 'none'), names.length ? 'ok' : 'warn');
-      const chips = document.getElementById('coord-chips');
+      const chips = document.getElementById('service-chips');
       chips.innerHTML = '';
       if (names.length === 0) {
         chips.innerHTML = '<span style="color:#64748b;font-size:0.85rem">No services registered.</span>';
@@ -431,44 +260,58 @@
           const btn = document.createElement('button');
           btn.className = 'btn-secondary';
           btn.textContent = name;
-          btn.onclick = () => coordConnect(base, name, btn);
+          btn.onclick = () => connect(base, name);
           chips.appendChild(btn);
         });
       }
-      document.getElementById('coord-step1').style.display = 'none';
-      document.getElementById('coord-step2').style.display = 'block';
+      document.getElementById('step1').style.display = 'none';
+      document.getElementById('step2').style.display = 'block';
     } catch (e) {
       log('Failed to fetch services: ' + e.message, 'error');
       document.getElementById('btn-fetch').disabled = false;
     }
   };
 
-  async function coordConnect(coordBase, svcName, chipBtn) {
-    // Disable all chips while connecting.
-    document.querySelectorAll('#coord-chips button').forEach(b => b.disabled = true);
-    chipBtn.textContent = svcName + ' …';
+  // ── Step 2: connect to service ─────────────────────────────────────────────
+  async function connect(coordBase, svcName) {
+    document.querySelectorAll('#service-chips button').forEach(b => b.disabled = true);
 
     const nodeIds = coordServices[svcName];
     if (!nodeIds || nodeIds.length === 0) {
       log('No nodes for service ' + svcName, 'error');
-      document.querySelectorAll('#coord-chips button').forEach(b => b.disabled = false);
-      chipBtn.textContent = svcName;
+      document.querySelectorAll('#service-chips button').forEach(b => b.disabled = false);
       return;
     }
     const nodeId = nodeIds[0];
     log('Connecting to "' + svcName + '" via node ' + nodeId + '…');
 
     try {
-      newPC();
+      pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+      pc.onconnectionstatechange = () => {
+        const s = pc.connectionState;
+        log('Connection state: ' + s, s === 'connected' ? 'ok' : s === 'failed' ? 'error' : 'info');
+        if (s === 'connected') setStatus('open', 'connected');
+        if (s === 'disconnected' || s === 'failed') setStatus('closed', s);
+      };
+
       dc = pc.createDataChannel('forward', { ordered: true });
 
-      const localDesc = await createOffer();
-      log('Posting offer to coordinator…');
+      // Create offer and gather ICE.
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      log('Gathering ICE candidates…');
+      setStatus('connecting', 'gathering ICE…');
+      await new Promise(resolve => {
+        if (pc.iceGatheringState === 'complete') { resolve(); return; }
+        pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === 'complete') resolve(); };
+      });
 
+      // Post offer to coordinator.
+      log('Posting offer to coordinator…');
       const resp = await fetch(coordBase + '/offer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ service: svcName, nodeId, offer: localDesc }),
+        body: JSON.stringify({ service: svcName, nodeId, offer: pc.localDescription }),
       });
       if (!resp.ok) {
         const txt = await resp.text();
@@ -479,133 +322,56 @@
       log('Remote description set — waiting for data channel…');
       setStatus('connecting', 'connecting…');
 
-      await waitDCOpen(dc);
+      // Wait for DC open.
+      await new Promise((resolve, reject) => {
+        if (dc.readyState === 'open') { resolve(); return; }
+        dc.onopen = resolve;
+        dc.onerror = e => reject(e.error ?? new Error('DC error'));
+      });
       log('Data channel open — handshaking…', 'ok');
-      await handshake(dc, svcName);
+
+      // Send service name, await "ok".
+      await new Promise((resolve, reject) => {
+        dc.send(svcName);
+        dc.onmessage = e => {
+          const raw = typeof e.data === 'string' ? e.data : new TextDecoder().decode(e.data);
+          if (raw === 'ok') resolve();
+          else reject(new Error(raw));
+        };
+      });
+
       log('Connected to "' + svcName + '"', 'ok');
       setStatus('open', 'connected');
-      activateChat(dc);
-      showChat();
+      activateChat();
+      document.getElementById('step2').style.display = 'none';
+      const chat = document.getElementById('step-chat');
+      chat.style.display = 'flex';
+      chat.style.flexDirection = 'column';
+      chat.style.flex = '1';
+      document.getElementById('main').style.justifyContent = 'flex-start';
+      document.getElementById('chat-input').focus();
     } catch (e) {
       log('Connect failed: ' + e.message, 'error');
       setStatus('closed', 'error');
-      document.querySelectorAll('#coord-chips button').forEach(b => b.disabled = false);
-      chipBtn.textContent = svcName;
+      document.querySelectorAll('#service-chips button').forEach(b => b.disabled = false);
     }
-  }
-
-  // ── Manual mode ───────────────────────────────────────────────────────────
-  let initialService;
-  // dcState: 'listing' | 'selecting' | 'ready'
-  let dcState;
-
-  document.getElementById('btn-create').onclick = async () => {
-    initialService = document.getElementById('service-name').value.trim();
-    log('Creating peer connection…');
-    newPC();
-    dc = pc.createDataChannel('forward', { ordered: true });
-    dcState = 'listing';
-    setupManualDC(dc);
-
-    await new Promise(resolve => {
-      pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === 'complete') resolve(); };
-      pc.createOffer().then(o => pc.setLocalDescription(o));
-    });
-    document.getElementById('offer-out').value = JSON.stringify(pc.localDescription);
-    log('Offer ready — copy it to the terminal', 'ok');
-    document.getElementById('manual-step1').style.display = 'none';
-    document.getElementById('manual-step2').style.display = 'block';
-    setStatus('connecting', 'gathering ICE…');
-  };
-
-  document.getElementById('btn-copy').onclick = () => {
-    navigator.clipboard.writeText(document.getElementById('offer-out').value).then(() => {
-      const btn = document.getElementById('btn-copy');
-      btn.textContent = 'Copied!';
-      setTimeout(() => btn.textContent = 'Copy offer', 1500);
-      log('Offer copied to clipboard');
-    });
-  };
-
-  document.getElementById('btn-connect').onclick = async () => {
-    const raw = document.getElementById('answer-in').value.trim();
-    if (!raw) { log('Paste the answer first', 'warn'); return; }
-    try {
-      const answer = JSON.parse(raw);
-      await pc.setRemoteDescription(answer);
-      log('Remote description set — waiting for data channel…');
-      setStatus('connecting', 'connecting…');
-    } catch (e) {
-      log('Bad answer JSON: ' + e.message, 'error');
-    }
-  };
-
-  function setupManualDC(channel) {
-    channel.onopen = () => {
-      if (initialService) {
-        log('Data channel open — connecting to "' + initialService + '"…', 'ok');
-        setStatus('connecting', 'connecting…');
-        dcState = 'selecting';
-        channel.send(initialService);
-      } else {
-        log('Data channel open — fetching services…', 'ok');
-        setStatus('connecting', 'listing services…');
-        channel.send('list');
-      }
-    };
-    channel.onclose = () => { log('Data channel closed', 'warn'); setStatus('closed', 'disconnected'); };
-    channel.onerror = e => log('Data channel error: ' + (e.error?.message ?? e), 'error');
-    channel.onmessage = e => {
-      const raw = typeof e.data === 'string' ? e.data : new TextDecoder().decode(e.data);
-
-      if (dcState === 'listing') {
-        let names;
-        try { names = JSON.parse(raw); } catch (_) { names = []; }
-        dcState = 'selecting';
-        const chips = document.getElementById('manual-chips');
-        chips.innerHTML = '';
-        if (names.length === 0) {
-          chips.innerHTML = '<span style="color:#64748b;font-size:0.85rem">No services configured.</span>';
-        } else {
-          names.forEach(name => {
-            const btn = document.createElement('button');
-            btn.className = 'btn-secondary';
-            btn.textContent = name;
-            btn.onclick = () => {
-              log('Connecting to "' + name + '"…');
-              setStatus('connecting', 'connecting…');
-              document.querySelectorAll('#manual-chips button').forEach(b => b.disabled = true);
-              channel.send(name);
-            };
-            chips.appendChild(btn);
-          });
-        }
-        log('Services: ' + (names.join(', ') || 'none'), names.length ? 'ok' : 'warn');
-        document.getElementById('manual-step2').style.display = 'none';
-        document.getElementById('manual-step3').style.display = 'block';
-        return;
-      }
-
-      if (dcState === 'selecting') {
-        if (raw === 'ok') {
-          dcState = 'ready';
-          log('Connected', 'ok');
-          setStatus('open', 'connected');
-          activateChat(channel);
-          showChat();
-        } else {
-          log('Connect failed: ' + raw, 'error');
-          setStatus('closed', 'error');
-          document.querySelectorAll('#manual-chips button').forEach(b => b.disabled = false);
-        }
-        return;
-      }
-
-      // ready — handled by activateChat; shouldn't reach here
-    };
   }
 
   // ── Chat ───────────────────────────────────────────────────────────────────
+  function activateChat() {
+    dc.onmessage = e => {
+      const raw = typeof e.data === 'string' ? e.data : new TextDecoder().decode(e.data);
+      const msgs = document.getElementById('chat-messages');
+      const line = document.createElement('div');
+      line.className = 'msg-in';
+      line.textContent = '← ' + raw.replace(/\r?\n$/, '');
+      msgs.appendChild(line);
+      msgs.scrollTop = msgs.scrollHeight;
+    };
+    dc.onclose = () => { log('Data channel closed', 'warn'); setStatus('closed', 'disconnected'); };
+    dc.onerror = e => log('Data channel error: ' + (e.error?.message ?? e), 'error');
+  }
+
   function sendMsg() {
     const input = document.getElementById('chat-input');
     const text = input.value.trim();

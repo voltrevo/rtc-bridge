@@ -82,19 +82,13 @@ cat > "$TMPDIR/fwd.json5" <<EOF
   services: {
     echo: "$ECHO_ADDR",
   },
-  signaling: {
-    type: "stdin",
-  },
   coordinators: ["ws://$COORD_ADDR/ws"],
   key: "$KEY",
 }
 EOF
 
 echo "==> Starting webrtc-forward (coordinator mode)"
-# Use a fifo in read-write mode (<>) so it doesn't block waiting for a writer;
-# this keeps stdin open so the process doesn't exit on EOF before registering.
-mkfifo "$TMPDIR/fwd-stdin"
-"$FORWARD" run --config "$TMPDIR/fwd.json5" <>"$TMPDIR/fwd-stdin" >"$TMPDIR/forward.log" 2>&1 &
+"$FORWARD" run --config "$TMPDIR/fwd.json5" >"$TMPDIR/forward.log" 2>&1 &
 wait_service "http://$COORD_ADDR" "echo"
 
 echo "==> Running cli-client via coordinator"

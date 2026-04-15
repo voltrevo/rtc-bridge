@@ -15,20 +15,12 @@ import (
 
 // Config is the validated configuration for webrtc-forward.
 type Config struct {
-	Services     map[string]string    // service name → host:port
-	Signaling    SignalingConfig
-	Coordinators []string             // WebSocket URLs of coordinators to register with
-	PrivKey      ed25519.PrivateKey   // node identity key (required when coordinators set)
+	Services     map[string]string  // service name → host:port
+	Coordinators []string           // WebSocket URLs of coordinators to register with
+	PrivKey      ed25519.PrivateKey // node identity key
 }
 
-// SignalingConfig describes how SDP offer/answer exchange happens.
-type SignalingConfig struct {
-	Type string // "stdin" or "http"
-	Addr string // required when Type == "http"
-}
-
-var allowedTopLevel = []string{"services", "signaling", "coordinators", "key"}
-var allowedSignaling = []string{"type", "addr"}
+var allowedTopLevel = []string{"services", "coordinators", "key"}
 
 // LoadConfig reads and strictly validates a JSON5 config file.
 func LoadConfig(path string) (*Config, error) {
@@ -72,51 +64,6 @@ func LoadConfig(path string) (*Config, error) {
 		}
 	}
 
-	// ── signaling ─────────────────────────────────────────────────────────────
-	sigVal, ok := raw["signaling"]
-	if !ok {
-		return nil, fmt.Errorf(`config: required field "signaling" is missing`)
-	}
-	sigMap, ok := sigVal.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf(`config: "signaling" must be an object, got %s`, typeName(sigVal))
-	}
-	if err := rejectUnknown("signaling", sigMap, allowedSignaling); err != nil {
-		return nil, err
-	}
-
-	// signaling.type
-	stVal, ok := sigMap["type"]
-	if !ok {
-		return nil, fmt.Errorf(`config: required field "signaling.type" is missing`)
-	}
-	sigType, ok := stVal.(string)
-	if !ok {
-		return nil, fmt.Errorf(`config: "signaling.type" must be a string, got %s`, typeName(stVal))
-	}
-	if sigType != "stdin" && sigType != "http" {
-		return nil, fmt.Errorf(`config: "signaling.type" must be "stdin" or "http", got %q`, sigType)
-	}
-	cfg.Signaling.Type = sigType
-
-	// signaling.addr
-	addrVal, hasAddr := sigMap["addr"]
-	if sigType == "http" {
-		if !hasAddr {
-			return nil, fmt.Errorf(`config: "signaling.addr" is required when signaling.type is "http"`)
-		}
-		addr, ok := addrVal.(string)
-		if !ok {
-			return nil, fmt.Errorf(`config: "signaling.addr" must be a string, got %s`, typeName(addrVal))
-		}
-		if addr == "" {
-			return nil, fmt.Errorf(`config: "signaling.addr" must not be empty`)
-		}
-		cfg.Signaling.Addr = addr
-	} else if hasAddr {
-		return nil, fmt.Errorf(`config: "signaling.addr" is not allowed when signaling.type is %q`, sigType)
-	}
-
 	// ── coordinators ──────────────────────────────────────────────────────────
 	if cVal, ok := raw["coordinators"]; ok {
 		cArr, ok := cVal.([]interface{})
@@ -134,24 +81,27 @@ func LoadConfig(path string) (*Config, error) {
 			cfg.Coordinators = append(cfg.Coordinators, s)
 		}
 	}
+	if len(cfg.Coordinators) == 0 {
+		return nil, fmt.Errorf(`config: "coordinators" is required and must have at least one entry`)
+	}
 
 	// ── key ───────────────────────────────────────────────────────────────────
-	if kVal, ok := raw["key"]; ok {
-		kStr, ok := kVal.(string)
-		if !ok {
-			return nil, fmt.Errorf(`config: "key" must be a string, got %s`, typeName(kVal))
-		}
-		privBytes, err := base64.StdEncoding.DecodeString(kStr)
-		if err != nil {
-			return nil, fmt.Errorf(`config: "key" is not valid base64: %w`, err)
-		}
-		if len(privBytes) != ed25519.PrivateKeySize {
-			return nil, fmt.Errorf(`config: "key" must be %d bytes (got %d)`, ed25519.PrivateKeySize, len(privBytes))
-		}
-		cfg.PrivKey = ed25519.PrivateKey(privBytes)
-	} else if len(cfg.Coordinators) > 0 {
-		return nil, fmt.Errorf(`config: "key" is required when coordinators are configured (run init to generate one)`)
+	kVal, ok := raw["key"]
+	if !ok {
+		return nil, fmt.Errorf(`config: "key" is required (run init to generate one)`)
 	}
+	kStr, ok := kVal.(string)
+	if !ok {
+		return nil, fmt.Errorf(`config: "key" must be a string, got %s`, typeName(kVal))
+	}
+	privBytes, err := base64.StdEncoding.DecodeString(kStr)
+	if err != nil {
+		return nil, fmt.Errorf(`config: "key" is not valid base64: %w`, err)
+	}
+	if len(privBytes) != ed25519.PrivateKeySize {
+		return nil, fmt.Errorf(`config: "key" must be %d bytes (got %d)`, ed25519.PrivateKeySize, len(privBytes))
+	}
+	cfg.PrivKey = ed25519.PrivateKey(privBytes)
 
 	return cfg, nil
 }
@@ -208,17 +158,8 @@ func GenerateSampleConfig(privKey ed25519.PrivateKey) string {
     // example: "127.0.0.1:7777",
   },
 
-  signaling: {
-    // "stdin" - interactive copy-paste in the terminal (no extra ports needed).
-    // "http"  - serves POST /offer for automated / CLI-client use.
-    type: "stdin",
-
-    // Uncomment and set addr when type is "http":
-    // addr: "127.0.0.1:8765",
-  },
-
-  // Coordinator WebSocket URLs to register with (optional).
-  // coordinators: ["wss://example.com/ws"],
+  // Coordinator WebSocket URLs to register with.
+  coordinators: ["wss://example.com/ws"],
 
   // Node identity key (ed25519 private key, base64). Generated by init.
   key: "` + keyB64 + `",

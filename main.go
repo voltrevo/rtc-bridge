@@ -7,20 +7,15 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"net"
-	"net/http"
 	"os"
 	"os/signal"
-	"sort"
-	"strings"
 	"sync"
 	"syscall"
 
@@ -73,28 +68,18 @@ func cmdRun(args []string) {
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	go func() { <-sig; cancel() }()
 
-	// Start coordinator connections if configured.
+	id := IdentityFromPrivKey(cfg.PrivKey)
+	fmt.Printf("node id: %s\n", id.NodeID)
+
 	var wg sync.WaitGroup
-	if len(cfg.Coordinators) > 0 {
-		id := IdentityFromPrivKey(cfg.PrivKey)
-		fmt.Printf("node id: %s\n", id.NodeID)
-		for _, coordURL := range cfg.Coordinators {
-			wg.Add(1)
-			go func(u string) {
-				defer wg.Done()
-				runCoordinator(ctx, u, id, cfg.Services)
-			}(coordURL)
-		}
+	for _, coordURL := range cfg.Coordinators {
+		wg.Add(1)
+		go func(u string) {
+			defer wg.Done()
+			runCoordinator(ctx, u, id, cfg.Services)
+		}(coordURL)
 	}
 
-	switch cfg.Signaling.Type {
-	case "http":
-		runHTTPSignaling(cfg.Signaling.Addr, cfg.Services)
-	default:
-		runStdin(cfg.Services)
-	}
-
-	cancel()
 	wg.Wait()
 }
 
@@ -119,81 +104,6 @@ func cmdInit(args []string) {
 	id := IdentityFromPrivKey(priv)
 	fmt.Printf("wrote config to %q\n", *configPath)
 	fmt.Printf("node id: %s\n", id.NodeID)
-}
-
-// ── Signaling modes ───────────────────────────────────────────────────────────
-
-func runHTTPSignaling(addr string, services map[string]string) {
-	fmt.Printf("signaling: http %s\n", addr)
-
-	http.HandleFunc("/offer", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "POST only", http.StatusMethodNotAllowed)
-			return
-		}
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		var offer webrtc.SessionDescription
-		if err := json.Unmarshal(body, &offer); err != nil {
-			http.Error(w, "bad offer JSON: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		if offer.Type != webrtc.SDPTypeOffer {
-			http.Error(w, fmt.Sprintf(`expected type "offer", got %q`, offer.Type), http.StatusBadRequest)
-			return
-		}
-		answer, err := handleOffer(offer, services)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(answer)
-	})
-	if err := http.ListenAndServe(addr, nil); err != nil {
-		fmt.Fprintf(os.Stderr, "http signaling: %v\n", err)
-		os.Exit(1)
-	}
-}
-
-func runStdin(services map[string]string) {
-	fmt.Println("signaling: stdin")
-	scanner := bufio.NewScanner(os.Stdin)
-	for {
-		fmt.Println("\nPaste the SDP offer JSON from the browser, then press Enter twice:")
-		raw, eof, err := readUntilBlank(scanner)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "reading stdin: %v\n", err)
-			os.Exit(1)
-		}
-		if eof {
-			fmt.Fprintln(os.Stderr, "stdin closed — exiting")
-			os.Exit(0)
-		}
-		if raw == "" {
-			continue
-		}
-		var offer webrtc.SessionDescription
-		if err := json.Unmarshal([]byte(raw), &offer); err != nil {
-			fmt.Printf("error: bad offer JSON: %v — try again\n", err)
-			continue
-		}
-		if offer.Type != webrtc.SDPTypeOffer {
-			fmt.Printf("error: expected type \"offer\" but got %q — did you paste the answer instead of the offer? Try again\n", offer.Type)
-			continue
-		}
-		answer, err := handleOffer(offer, services)
-		if err != nil {
-			fmt.Printf("error handling offer: %v — try again\n", err)
-			continue
-		}
-		answerJSON, _ := json.Marshal(answer)
-		fmt.Println("\nPaste this SDP answer into the browser:")
-		fmt.Println(string(answerJSON))
-	}
 }
 
 // ── WebRTC ────────────────────────────────────────────────────────────────────
@@ -223,29 +133,11 @@ func handleOffer(offer webrtc.SessionDescription, services map[string]string) (*
 		dc.OnError(func(e error) { fmt.Printf("[dc] error: %v\n", e) })
 
 		dc.OnOpen(func() {
-			// First message: "list" returns service names; anything else is a service name.
 			firstMsg, ok := <-buf
 			if !ok {
 				return
 			}
-			var svcName string
-			if string(firstMsg) == "list" {
-				names := make([]string, 0, len(services))
-				for k := range services {
-					names = append(names, k)
-				}
-				sort.Strings(names)
-				listJSON, _ := json.Marshal(names)
-				dc.Send(listJSON)
-				// Now wait for the service name.
-				svcBytes, ok := <-buf
-				if !ok {
-					return
-				}
-				svcName = string(svcBytes)
-			} else {
-				svcName = string(firstMsg)
-			}
+			svcName := string(firstMsg)
 			target, exists := services[svcName]
 			if !exists {
 				dc.SendText(fmt.Sprintf("err: unknown service %q", svcName))
@@ -317,20 +209,3 @@ func bridge(dc *webrtc.DataChannel, conn net.Conn, buf chan []byte) {
 	}()
 }
 
-// readUntilBlank reads lines from scanner until a blank line or EOF.
-// Returns (content, eof, err). eof is true when stdin was closed with no content.
-func readUntilBlank(scanner *bufio.Scanner) (string, bool, error) {
-	var sb strings.Builder
-	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" && sb.Len() > 0 {
-			return strings.TrimSpace(sb.String()), false, nil
-		}
-		sb.WriteString(line)
-	}
-	if err := scanner.Err(); err != nil {
-		return "", false, err
-	}
-	// EOF
-	return "", true, nil
-}
