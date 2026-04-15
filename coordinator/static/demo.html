@@ -198,7 +198,7 @@
   <div id="step3" hidden>
     <div class="repl">
       <div>
-        <div class="section-label">Connected to</div>
+        <div class="section-label" id="conn-label">Connecting to</div>
         <div class="node-id" id="connected-id"></div>
       </div>
       <div class="repl-actions">
@@ -295,13 +295,15 @@
 
     window.openChannel = async (nodeId, service) => {
       setReplResult('Connecting…', '');
+      document.getElementById('conn-label').textContent = 'Connecting to';
       show('step3');
       hide('step4');
       document.getElementById('connected-id').textContent = nodeId;
       populateServiceSelect(service);
       const result = await connectNode(nodeId, service);
       if (result === true) {
-        setReplResult('Connected', 'ok');
+        document.getElementById('conn-label').textContent = 'Connected to';
+        setReplResult('', 'ok');
       } else {
         setReplResult(result, 'err');
       }
