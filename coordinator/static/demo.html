@@ -129,7 +129,7 @@
     .result.ok  { color: #3fb950; }
     .result.err { color: #f85149; }
 
-    #step4 {
+    .service-panel {
       border-top: 1px solid #30363d;
       padding-top: 0.75rem;
       margin-top: 0.25rem;
@@ -217,15 +217,8 @@
         </div>
       </div>
 
-      <!-- Step 4: TCP bridge terminal (nested inside node panel) -->
-      <div id="step4" hidden>
-        <div class="term-log" id="term-log"></div>
-        <div class="term-input-row">
-          <input class="term-input" id="term-input" placeholder="send…" onkeydown="termKey(event)">
-          <button onclick="termSend()">Send</button>
-          <button class="danger" onclick="closeBridge()">×</button>
-        </div>
-      </div>
+      <!-- Service bridge panels appended here dynamically -->
+      <div id="service-panels"></div>
     </div>
   </div>
 
@@ -233,8 +226,10 @@
     import { Coordinator, connect } from '/rtc-bridge.js';
 
     // ── State ──────────────────────────────────────────────────────────────
-    let coordinator = null;
-    let channel     = null;
+    let coordinator  = null;
+    let replChannel  = null; // REPL connection (card-click flow)
+    let currentNodeId = null;
+    let directMode   = false; // true when entered via chip-click
 
     // ── Step 1: fetch nodes ────────────────────────────────────────────────
     window.fetchNodes = async () => {
@@ -265,14 +260,12 @@
         card.innerHTML = `
           <div class="node-id">${n.nodeId}</div>
           <div class="row" style="gap:0.3rem"></div>`;
-        // Card click → connect to node, open REPL
         card.onclick = () => openChannel(n.nodeId, (n.services || [])[0]);
         const chips = card.querySelector('.row');
         for (const svc of (n.services || [])) {
           const chip = document.createElement('span');
           chip.className = 'chip';
           chip.innerHTML = `<span class="svc-dot"></span>${svc}`;
-          // Chip click → connect + immediately bridge to that service
           chip.onclick = (e) => { e.stopPropagation(); openAndBridge(n.nodeId, svc); };
           chips.appendChild(chip);
         }
@@ -280,53 +273,54 @@
       }
     }
 
-    // ── Step 3: open channel ───────────────────────────────────────────────
-    async function connectNode(nodeId, service) {
-      try {
-        channel = await connect(coordinator, nodeId, service);
-        channel.dc.addEventListener('close', () => closeBridge());
-        return true;
-      } catch(e) {
-        channel = null;
-        return String(e);
-      }
-    }
-
+    // ── Step 3: node panel ─────────────────────────────────────────────────
+    // Card click → REPL connection; services bridged independently from here.
     window.openChannel = async (nodeId, service) => {
+      doDisconnect();
+      directMode = false;
+      currentNodeId = nodeId;
       setReplResult('Connecting…', '');
       document.getElementById('conn-label').textContent = 'Connecting to';
-      show('step3');
-      show('repl-controls');
-      hide('step4');
       document.getElementById('connected-id').textContent = nodeId;
       populateServiceSelect(service);
-      const result = await connectNode(nodeId, service);
-      if (result === true) {
+      show('step3');
+      show('repl-controls');
+      try {
+        replChannel = await connect(coordinator, nodeId, service);
+        replChannel.dc.addEventListener('close', () => doDisconnect());
         document.getElementById('conn-label').textContent = 'Connected to';
         setReplResult('', 'ok');
-      } else {
-        setReplResult(result, 'err');
+      } catch(e) {
+        replChannel = null;
+        setReplResult(String(e), 'err');
       }
     };
 
+    // Chip click → connect + bridge immediately (direct mode).
+    // Closing the service panel closes the node connection too.
     window.openAndBridge = async (nodeId, service) => {
-      const result = await connectNode(nodeId, service);
-      if (result === true) {
-        await doBridge(service);
-      } else {
-        // Connection failed — fall back to REPL to show error
-        setReplResult(result, 'err');
-        show('step3');
-        hide('step4');
-        document.getElementById('connected-id').textContent = nodeId;
-        populateServiceSelect(service);
+      doDisconnect();
+      directMode = true;
+      currentNodeId = nodeId;
+      document.getElementById('conn-label').textContent = 'Connecting to';
+      document.getElementById('connected-id').textContent = nodeId;
+      show('step3');
+      hide('repl-controls');
+      try {
+        const ch = await connect(coordinator, nodeId, service);
+        document.getElementById('conn-label').textContent = 'Connected to';
+        await ch.bridge(service);
+        addServicePanel(ch, service, () => doDisconnect());
+      } catch(e) {
+        directMode = false;
+        show('repl-controls');
+        setReplResult(String(e), 'err');
       }
     };
 
     function populateServiceSelect(selected) {
       const sel = document.getElementById('svc-select');
       sel.innerHTML = '';
-      // We only know the one service the user clicked; list() will reveal more
       addOption(sel, selected);
     }
 
@@ -340,19 +334,19 @@
 
     // ── REPL actions ───────────────────────────────────────────────────────
     window.doPing = async () => {
-      if (!channel) return;
+      if (!replChannel) return;
       setReplResult('…', '');
       try {
-        const rtt = await channel.ping();
+        const rtt = await replChannel.ping();
         setReplResult(`pong  ${rtt} ms`, 'ok');
       } catch(e) { setReplResult(String(e), 'err'); }
     };
 
     window.doList = async () => {
-      if (!channel) return;
+      if (!replChannel) return;
       setReplResult('…', '');
       try {
-        const svcs = await channel.list();
+        const svcs = await replChannel.list();
         const sel = document.getElementById('svc-select');
         svcs.forEach(s => addOption(sel, s));
         setReplResult(svcs.join(', '), 'ok');
@@ -360,10 +354,10 @@
     };
 
     window.doVerify = async () => {
-      if (!channel) return;
+      if (!replChannel) return;
       setReplResult('Verifying…', '');
       try {
-        const r = await channel.verifyIdentity();
+        const r = await replChannel.verifyIdentity();
         if (r.ok) {
           setReplResult(`✓ verified  ${r.pubkey.slice(0, 16)}…`, 'ok');
         } else {
@@ -372,68 +366,92 @@
       } catch(e) { setReplResult(String(e), 'err'); }
     };
 
+    // Bridge button: creates a NEW connection for this service (REPL stays alive).
     window.doBridge = async (svc) => {
-      if (!channel) return;
+      if (!replChannel || !currentNodeId) return;
       svc = svc ?? document.getElementById('svc-select').value;
-      setReplResult(`Bridging to ${svc}…`, '');
+      setReplResult(`Connecting to ${svc}…`, '');
       try {
-        await channel.bridge(svc);
+        const ch = await connect(coordinator, currentNodeId, svc);
+        await ch.bridge(svc);
         setReplResult('', '');
-        startTerminal();
-      } catch(e) { setReplResult(String(e), 'err'); }
+        addServicePanel(ch, svc, null); // null = closing panel doesn't close node
+      } catch(e) {
+        setReplResult(String(e), 'err');
+      }
     };
 
     window.doDisconnect = () => {
-      if (channel) { channel.close(); channel = null; }
+      if (replChannel) { replChannel.close(); replChannel = null; }
+      document.getElementById('service-panels').innerHTML = '';
+      currentNodeId = null;
+      directMode = false;
       hide('step3');
-      hide('step4');
     };
 
-    window.closeBridge = () => {
-      if (channel) { channel.close(); channel = null; }
-      hide('step4');
-      show('repl-controls');
-      setReplResult('Disconnected', '');
-    };
+    // ── Service bridge panels ──────────────────────────────────────────────
+    function addServicePanel(ch, svc, onClose) {
+      const panels = document.getElementById('service-panels');
+      const panel  = document.createElement('div');
+      panel.className = 'service-panel';
 
-    // ── Terminal (bridge mode) ─────────────────────────────────────────────
-    function startTerminal() {
-      hide('repl-controls');
-      show('step4');
-      const log = document.getElementById('term-log');
-      log.innerHTML = '';
-      termLine('info', '— bridged —');
+      const label = document.createElement('div');
+      label.className = 'section-label';
+      label.style.marginBottom = '0.3rem';
+      label.textContent = svc;
+      panel.appendChild(label);
 
-      channel.dc.addEventListener('message', (e) => {
-        const text = typeof e.data === 'string'
-          ? e.data
-          : new TextDecoder().decode(e.data);
-        termLine('recv', text);
+      const log = document.createElement('div');
+      log.className = 'term-log';
+      panel.appendChild(log);
+
+      const inputRow = document.createElement('div');
+      inputRow.className = 'term-input-row';
+
+      const input = document.createElement('input');
+      input.className = 'term-input';
+      input.placeholder = 'send…';
+      inputRow.appendChild(input);
+
+      const sendBtn = document.createElement('button');
+      sendBtn.textContent = 'Send';
+      const doSend = () => {
+        const text = input.value;
+        if (!text) return;
+        input.value = '';
+        panelLine(log, 'sent', text);
+        ch.dc.send(text + '\n');
+      };
+      sendBtn.onclick = doSend;
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') doSend(); });
+      inputRow.appendChild(sendBtn);
+
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'danger';
+      closeBtn.textContent = '×';
+      closeBtn.onclick = () => { ch.close(); panel.remove(); if (onClose) onClose(); };
+      inputRow.appendChild(closeBtn);
+
+      panel.appendChild(inputRow);
+      panels.appendChild(panel);
+
+      ch.dc.addEventListener('message', (e) => {
+        const text = typeof e.data === 'string' ? e.data : new TextDecoder().decode(e.data);
+        panelLine(log, 'recv', text);
       });
+      ch.dc.addEventListener('close', () => { panel.remove(); if (onClose) onClose(); });
 
-      document.getElementById('term-input').focus();
+      panelLine(log, 'info', '— bridged —');
+      input.focus();
     }
 
-    function termLine(cls, text) {
-      const log = document.getElementById('term-log');
+    function panelLine(log, cls, text) {
       const div = document.createElement('div');
       div.className = `term-line ${cls}`;
       div.textContent = text;
       log.appendChild(div);
       log.scrollTop = log.scrollHeight;
     }
-
-    window.termKey = (e) => { if (e.key === 'Enter') termSend(); };
-
-    window.termSend = () => {
-      if (!channel) return;
-      const inp = document.getElementById('term-input');
-      const text = inp.value;
-      if (!text) return;
-      inp.value = '';
-      termLine('sent', text);
-      channel.dc.send(text + '\n');
-    };
 
     // ── Helpers ────────────────────────────────────────────────────────────
     function show(id) { document.getElementById(id).hidden = false; }
