@@ -18,7 +18,7 @@ exchange SDP, then establishes a direct WebRTC connection.
 | Binary | Purpose |
 |---|---|
 | `rtc-mesh` (node) | Node that bridges WebRTC data channels to local TCP services |
-| `coordinator` | Discovery + signaling server (one per deployment) |
+| `coordinator` | Discovery + signaling server |
 | `echo` | Test TCP echo server |
 
 ## Quick start
