@@ -192,6 +192,9 @@ const landingHTML = `<!DOCTYPE html>
       line-height: 1.7;
     }
 
+    .description a { color: inherit; text-decoration: none; }
+    .description a:hover code { border-color: #58a6ff; color: #58a6ff; }
+
     code {
       background: #161b22;
       border: 1px solid #30363d;
@@ -253,7 +256,8 @@ const landingHTML = `<!DOCTYPE html>
 
     .cta {
       display: inline-block;
-      margin-top: 2rem;
+      margin-top: 1rem;
+      margin-bottom: 1rem;
       padding: 0.6rem 1.4rem;
       background: #1f6feb;
       border: 1px solid #388bfd;
@@ -270,6 +274,7 @@ const landingHTML = `<!DOCTYPE html>
 <body>
   <div class="wordmark">rtc-bridge</div>
   <div class="tagline">WebRTC data channel → TCP service bridge &amp; coordinator</div>
+  <a class="cta" href="/demo.html">Try the demo →</a>
 
   <div class="stats">
     <div class="card">
@@ -287,8 +292,8 @@ const landingHTML = `<!DOCTYPE html>
 
   <div class="description">
     Nodes dial in via <code>WebSocket</code> and authenticate with an ed25519 keypair,
-    then register their TCP services. Browsers discover nodes via <code>/nodes</code>
-    or <code>/services</code>, exchange SDP through <code>/offer</code>, and connect
+    then register their TCP services. Browsers discover nodes via <a href="/nodes"><code>/nodes</code></a>
+    or <a href="/services"><code>/services</code></a>, exchange SDP through <code>/offer</code>, and connect
     directly over WebRTC — no public IP or open ports required on nodes.
   </div>
 
@@ -318,8 +323,6 @@ const landingHTML = `<!DOCTYPE html>
       </tr>
     </tbody>
   </table>
-
-  <a class="cta" href="/demo.html">Try the demo →</a>
 
   <script>
     (async () => {
