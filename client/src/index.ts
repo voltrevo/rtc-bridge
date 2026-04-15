@@ -1,4 +1,4 @@
-// rtc-mesh browser client library
+// rtc-bridge browser client library
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
@@ -171,7 +171,7 @@ export class NodeChannel {
     }
 
     const joint  = xor32(rClient, rNode);
-    const prefix = new TextEncoder().encode('rtc-mesh:dc-challenge:');
+    const prefix = new TextEncoder().encode('rtc-bridge:dc-challenge:');
     const msg    = new Uint8Array(prefix.length + joint.length);
     msg.set(prefix);
     msg.set(joint, prefix.length);

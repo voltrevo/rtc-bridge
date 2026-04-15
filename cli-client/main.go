@@ -1,4 +1,4 @@
-// cli-client: WebRTC client that connects to a rtc-mesh HTTP signaling
+// cli-client: WebRTC client that connects to a rtc-bridge HTTP signaling
 // endpoint, opens a data channel, sends test messages and prints responses.
 //
 // Usage:
@@ -23,7 +23,7 @@ import (
 
 func main() {
 	fs := flag.NewFlagSet("cli-client", flag.ContinueOnError)
-	signalURL := fs.String("signal", "http://127.0.0.1:8765", "rtc-mesh HTTP signaling URL (base)")
+	signalURL := fs.String("signal", "http://127.0.0.1:8765", "rtc-bridge HTTP signaling URL (base)")
 	coordURL := fs.String("coordinator", "", "coordinator base URL (uses /services + /offer instead of --signal)")
 	nodeID := fs.String("node", "", "nodeId to connect to (optional when using --coordinator; auto-picks first if blank)")
 	service := fs.String("service", "", "service name to request (required)")

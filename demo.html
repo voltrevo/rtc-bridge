@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>rtc-mesh</title>
+  <title>rtc-bridge</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -275,7 +275,7 @@
 
 <header>
   <div id="status-dot"></div>
-  <strong>rtc-mesh</strong>
+  <strong>rtc-bridge</strong>
   <span id="status-text">not connected</span>
 </header>
 
@@ -687,7 +687,7 @@
     const sigBytes = hexToBytes(parts[2]);
 
     // 4. Verify signature with claimed pubkey
-    const prefix = new TextEncoder().encode('rtc-mesh:dc-challenge:');
+    const prefix = new TextEncoder().encode('rtc-bridge:dc-challenge:');
     const joint = xorBytes(rClient, rNode);
     const msg = new Uint8Array(prefix.length + joint.length);
     msg.set(prefix); msg.set(joint, prefix.length);

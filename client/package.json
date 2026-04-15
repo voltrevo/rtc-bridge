@@ -1,9 +1,9 @@
 {
-  "name": "rtc-mesh",
+  "name": "rtc-bridge",
   "private": true,
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --format=esm --sourcemap --outfile=../coordinator/static/rtc-mesh.js",
-    "dev": "esbuild src/index.ts --bundle --format=esm --sourcemap --outfile=../coordinator/static/rtc-mesh.js --watch",
+    "build": "esbuild src/index.ts --bundle --format=esm --sourcemap --outfile=../coordinator/static/rtc-bridge.js",
+    "dev": "esbuild src/index.ts --bundle --format=esm --sourcemap --outfile=../coordinator/static/rtc-bridge.js --watch",
     "typecheck": "tsc --noEmit",
     "typecheck:watch": "tsc --noEmit --watch"
   },

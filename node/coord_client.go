@@ -11,7 +11,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/pion/webrtc/v3"
 
-	"rtc-mesh/protocol"
+	"rtc-bridge/protocol"
 )
 
 const (

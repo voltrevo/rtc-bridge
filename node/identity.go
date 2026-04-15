@@ -3,7 +3,7 @@ package main
 import (
 	"crypto/ed25519"
 
-	"rtc-mesh/protocol"
+	"rtc-bridge/protocol"
 )
 
 // Identity holds the node's long-term keypair and derived nodeId.

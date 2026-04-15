@@ -1,12 +1,12 @@
 *.json5
-/node/rtc-mesh
+/node/rtc-bridge
 /cli-client/cli-client
 /echo/echo
 /coordinator/coordinator
 /webrtc-forward
-/rtc-mesh
+/rtc-bridge
 
 # client build output
 /client/node_modules/
-/coordinator/static/rtc-mesh.js
-/coordinator/static/rtc-mesh.js.map
+/coordinator/static/rtc-bridge.js
+/coordinator/static/rtc-bridge.js.map

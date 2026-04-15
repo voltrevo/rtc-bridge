@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-//go:embed static/demo.html static/rtc-mesh.js static/rtc-mesh.js.map
+//go:embed static/demo.html static/rtc-bridge.js static/rtc-bridge.js.map
 var staticFiles embed.FS
 
 // sdpTau is the EWMA time constant for SDP exchange rate (6 hours in seconds).
@@ -95,7 +95,7 @@ const landingHTML = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>rtc-mesh coordinator</title>
+  <title>rtc-bridge coordinator</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -268,7 +268,7 @@ const landingHTML = `<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <div class="wordmark">rtc-mesh</div>
+  <div class="wordmark">rtc-bridge</div>
   <div class="tagline">WebRTC data channel → TCP service bridge &amp; coordinator</div>
 
   <div class="stats">

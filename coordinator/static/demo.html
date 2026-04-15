@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>rtc-mesh demo</title>
+  <title>rtc-bridge demo</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -177,7 +177,7 @@
   </style>
 </head>
 <body>
-  <h1>rtc-mesh demo</h1>
+  <h1>rtc-bridge demo</h1>
 
   <!-- Step 1: coordinator URL -->
   <div class="row" id="step1">
@@ -229,7 +229,7 @@
   </div>
 
   <script type="module">
-    import { Coordinator, connect } from '/rtc-mesh.js';
+    import { Coordinator, connect } from '/rtc-bridge.js';
 
     // ── State ──────────────────────────────────────────────────────────────
     let coordinator = null;

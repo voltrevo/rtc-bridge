@@ -1,4 +1,4 @@
-module rtc-mesh
+module rtc-bridge
 
 go 1.22.2
 

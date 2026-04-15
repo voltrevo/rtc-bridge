@@ -21,7 +21,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
-	"rtc-mesh/protocol"
+	"rtc-bridge/protocol"
 )
 
 func main() {
@@ -90,8 +90,8 @@ func cmdRun(args []string) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", coord.handleLanding)
 	mux.HandleFunc("/demo.html", serveStatic("static/demo.html", "text/html; charset=utf-8"))
-	mux.HandleFunc("/rtc-mesh.js", serveStatic("static/rtc-mesh.js", "application/javascript"))
-	mux.HandleFunc("/rtc-mesh.js.map", serveStatic("static/rtc-mesh.js.map", "application/json"))
+	mux.HandleFunc("/rtc-bridge.js", serveStatic("static/rtc-bridge.js", "application/javascript"))
+	mux.HandleFunc("/rtc-bridge.js.map", serveStatic("static/rtc-bridge.js.map", "application/json"))
 	mux.HandleFunc("/api/stats", coord.handleStats)
 	mux.HandleFunc("/ws", coord.handleNodeWS)
 	mux.HandleFunc("/nodes", coord.handleNodes)

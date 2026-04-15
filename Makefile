@@ -11,11 +11,11 @@ coordinator: client
 	go build -o coordinator/coordinator ./coordinator
 
 node:
-	go build -o node/rtc-mesh ./node
+	go build -o node/rtc-bridge ./node
 
 echo:
 	go build -o echo/echo ./echo
 
 clean:
-	rm -f coordinator/coordinator node/rtc-mesh echo/echo
-	rm -f coordinator/static/rtc-mesh.js coordinator/static/rtc-mesh.js.map
+	rm -f coordinator/coordinator node/rtc-bridge echo/echo
+	rm -f coordinator/static/rtc-bridge.js coordinator/static/rtc-bridge.js.map
