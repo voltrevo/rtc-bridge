@@ -274,7 +274,7 @@ const landingHTML = `<!DOCTYPE html>
 <body>
   <div class="wordmark">rtc-bridge</div>
   <div class="tagline">WebRTC data channel → TCP service bridge &amp; coordinator</div>
-  <a class="cta" href="/demo.html">Try the demo →</a>
+  <a class="cta" href="/demo.html">Try it →</a>
 
   <div class="stats">
     <div class="card">
