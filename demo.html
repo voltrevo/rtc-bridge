@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>webrtc-forward</title>
+  <title>rtc-mesh</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -45,12 +45,13 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
       padding: 32px;
       gap: 20px;
+      overflow-y: auto;
     }
 
-    .step { width: 100%; max-width: 520px; }
+    .step { width: 100%; max-width: 560px; }
     .step h2 {
       font-size: 0.75rem;
       margin-bottom: 6px;
@@ -79,8 +80,8 @@
       cursor: pointer;
       border: none;
       border-radius: 6px;
-      padding: 10px 20px;
-      font-size: 0.9rem;
+      padding: 8px 18px;
+      font-size: 0.85rem;
       font-weight: 600;
       transition: opacity 0.15s;
     }
@@ -88,34 +89,116 @@
     button:disabled { opacity: 0.45; cursor: default; }
     .btn-primary   { background: #6366f1; color: #fff; }
     .btn-secondary { background: #2d3148; color: #e2e8f0; }
+    .btn-sm        { padding: 5px 12px; font-size: 0.78rem; }
+    .btn-ok        { background: #16a34a; color: #fff; }
 
-    /* Service list */
-    .service-group {
-      margin-bottom: 14px;
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 18px;
+      border-bottom: 1px solid #2d3148;
+      padding-bottom: 0;
     }
-    .service-group:last-child { margin-bottom: 0; }
-    .service-label {
-      font-size: 0.8rem;
-      font-weight: 600;
-      color: #94a3b8;
-      margin-bottom: 6px;
+    .tab-btn {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      border-radius: 0;
+      color: #64748b;
+      padding: 6px 14px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      margin-bottom: -1px;
     }
+    .tab-btn.active {
+      color: #a5b4fc;
+      border-bottom-color: #6366f1;
+    }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Chips ── */
     .chips {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
+      margin-bottom: 10px;
     }
-    .node-chip {
+    .chip {
       font-family: monospace;
       font-size: 0.78rem;
     }
+    .service-chip {
+      background: #1e2235;
+      border: 1px solid #3730a3;
+      color: #a5b4fc;
+      border-radius: 20px;
+      padding: 5px 14px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .service-chip:hover:not(:disabled) { background: #2d3660; }
+    .node-chip {
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      color: #94a3b8;
+      border-radius: 4px;
+    }
+    .node-chip:hover:not(:disabled) { border-color: #6366f1; color: #a5b4fc; }
 
-    /* Chat */
+    /* ── REPL panel ── */
+    #node-panel {
+      width: 100%;
+      max-width: 560px;
+    }
+    #node-panel h2 {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 10px;
+    }
+    #node-info {
+      font-family: monospace;
+      font-size: 0.8rem;
+      color: #64748b;
+      margin-bottom: 14px;
+    }
+    .node-action-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .action-result {
+      font-family: monospace;
+      font-size: 0.8rem;
+      color: #94a3b8;
+    }
+    .action-result.ok  { color: #22c55e; }
+    .action-result.err { color: #ef4444; }
+    #repl-services {
+      margin-top: 4px;
+      margin-bottom: 8px;
+      padding-left: 2px;
+    }
+
+    /* ── Chat ── */
+    #step-chat {
+      flex: 1;
+      width: 100%;
+      max-width: 560px;
+      flex-direction: column;
+      gap: 10px;
+    }
     #chat-messages {
       flex: 1;
+      min-height: 200px;
       overflow-y: auto;
       width: 100%;
-      max-width: 520px;
       background: #1a1d27;
       border: 1px solid #2d3148;
       border-radius: 6px;
@@ -130,7 +213,6 @@
       display: flex;
       gap: 8px;
       width: 100%;
-      max-width: 520px;
     }
     #chat-input {
       flex: 1;
@@ -144,22 +226,29 @@
       margin-bottom: 0;
     }
     #chat-input:focus { border-color: #6366f1; }
+    #chat-svc-label {
+      font-size: 0.75rem;
+      color: #64748b;
+      margin-bottom: 6px;
+    }
 
     /* ── Log panel ── */
     #log-panel {
-      width: 280px;
+      width: 260px;
       flex-shrink: 0;
       background: #1a1d27;
       border-left: 1px solid #2d3148;
       display: flex;
       flex-direction: column;
     }
-    #log-panel header {
+    #log-panel > header {
       font-size: 0.72rem;
       color: #7c85a6;
       text-transform: uppercase;
       letter-spacing: 0.08em;
       border-bottom: 1px solid #2d3148;
+      padding: 12px 20px;
+      background: #1a1d27;
     }
     #log-entries {
       flex: 1;
@@ -186,7 +275,7 @@
 
 <header>
   <div id="status-dot"></div>
-  <strong>webrtc-forward</strong>
+  <strong>rtc-mesh</strong>
   <span id="status-text">not connected</span>
 </header>
 
@@ -195,22 +284,60 @@
 
     <!-- Step 1: coordinator URL -->
     <div class="step" id="step1">
-      <h2>Step 1 — Connect to coordinator</h2>
-      <p>Enter the coordinator URL to discover available services.</p>
-      <label>Coordinator URL:</label>
+      <h2>Connect to coordinator</h2>
+      <p>Enter the coordinator URL to discover available nodes and services.</p>
+      <label>Coordinator URL</label>
       <input id="coord-url" type="text" placeholder="http://localhost:8765" autocomplete="off">
+      <script>document.getElementById('coord-url').value = location.protocol + '//' + location.hostname + ':8765';</script>
       <button class="btn-primary" id="btn-fetch">Fetch Services</button>
     </div>
 
-    <!-- Step 2: select service + node -->
+    <!-- Step 2: mode tabs -->
     <div class="step" id="step2" style="display:none">
-      <h2>Step 2 — Select service</h2>
-      <p>Click a node to connect. WebRTC negotiation happens automatically.</p>
-      <div id="service-list"></div>
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="quick">Quick</button>
+        <button class="tab-btn" data-tab="full">Full</button>
+      </div>
+
+      <!-- Quick tab: service → random node → connect -->
+      <div class="tab-panel active" id="tab-quick">
+        <p style="margin-bottom:12px">Pick a service — connects to a random available node.</p>
+        <div class="chips" id="quick-service-chips"></div>
+      </div>
+
+      <!-- Full tab: node chips → open DC → REPL -->
+      <div class="tab-panel" id="tab-full">
+        <p style="margin-bottom:12px">Pick a node to open a data channel and explore interactively.</p>
+        <div id="full-service-groups"></div>
+      </div>
     </div>
 
-    <!-- Chat -->
-    <div id="step-chat" style="display:none;flex:1;width:100%;max-width:520px;flex-direction:column;gap:10px">
+    <!-- REPL / node panel (Full mode) -->
+    <div id="node-panel" style="display:none">
+      <h2>Node connection</h2>
+      <div id="node-info"></div>
+      <div class="node-action-row">
+        <button class="btn-secondary btn-sm" id="btn-ping">Ping</button>
+        <span class="action-result" id="ping-result"></span>
+      </div>
+      <div class="node-action-row">
+        <button class="btn-secondary btn-sm" id="btn-verify">Verify Node</button>
+        <span class="action-result" id="verify-result"></span>
+      </div>
+      <div class="node-action-row">
+        <button class="btn-secondary btn-sm" id="btn-list">List services</button>
+      </div>
+      <div id="repl-services" style="display:none">
+        <div class="chips" id="repl-svc-chips"></div>
+      </div>
+    </div>
+
+    <!-- Chat panel -->
+    <div id="step-chat" style="display:none;flex:1;width:100%;max-width:560px;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div id="chat-svc-label"></div>
+        <button class="btn-secondary btn-sm" id="btn-reset">Disconnect</button>
+      </div>
       <div id="chat-messages"></div>
       <div id="chat-input-row">
         <input id="chat-input" type="text" placeholder="Type a message and press Enter…" autocomplete="off">
@@ -228,7 +355,7 @@
 </div>
 
 <script>
-  // ── Logging ────────────────────────────────────────────────────────────────
+  // ── Utilities ──────────────────────────────────────────────────────────────
   function log(msg, level = 'info') {
     const el = document.getElementById('log-entries');
     const entry = document.createElement('div');
@@ -248,14 +375,61 @@
     document.getElementById('status-text').textContent = text;
   }
 
-  // ── State ─────────────────────────────────────────────────────────────────
-  let pc, dc;
+// ── Crypto helpers ─────────────────────────────────────────────────────────
+  function hexToBytes(hex) {
+    const arr = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < arr.length; i++)
+      arr[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+    return arr;
+  }
+
+  function bytesToHex(bytes) {
+    return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  function xorBytes(a, b) {
+    const out = new Uint8Array(a.length);
+    for (let i = 0; i < a.length; i++) out[i] = a[i] ^ b[i];
+    return out;
+  }
+
+  async function sha256(bytes) {
+    return new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  }
+
+  async function pubkeyToNodeId(pubKeyHex) {
+    const pubBytes = hexToBytes(pubKeyHex);
+    const hash = await sha256(pubBytes);
+    // base36(hash) first 30 chars
+    let n = BigInt('0x' + bytesToHex(hash));
+    let s = '';
+    while (n > 0n) { s = (n % 36n).toString(36) + s; n /= 36n; }
+    return s.padStart(50, '0').slice(0, 30);
+  }
+
+  // ── State ──────────────────────────────────────────────────────────────────
+  let coordBase = '';
   let coordServices = {}; // { svcName: [nodeId, ...] }
+  let pc = null, dc = null;
+  let currentMode = 'quick';
+  let currentNodeId = '';
+
+  // ── Tab switching ──────────────────────────────────────────────────────────
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+      currentMode = btn.dataset.tab;
+    };
+  });
 
   // ── Step 1: fetch services ─────────────────────────────────────────────────
   document.getElementById('btn-fetch').onclick = async () => {
     const base = document.getElementById('coord-url').value.trim().replace(/\/$/, '');
     if (!base) { log('Enter a coordinator URL', 'warn'); return; }
+    coordBase = base;
     log('Fetching services from ' + base + '…');
     document.getElementById('btn-fetch').disabled = true;
     try {
@@ -264,33 +438,10 @@
       coordServices = await resp.json();
       const names = Object.keys(coordServices).sort();
       log('Services: ' + (names.join(', ') || 'none'), names.length ? 'ok' : 'warn');
-      const list = document.getElementById('service-list');
-      list.innerHTML = '';
-      if (names.length === 0) {
-        list.innerHTML = '<span style="color:#64748b;font-size:0.85rem">No services registered.</span>';
-      } else {
-        names.forEach(svcName => {
-          const group = document.createElement('div');
-          group.className = 'service-group';
-          const label = document.createElement('div');
-          label.className = 'service-label';
-          label.textContent = svcName;
-          group.appendChild(label);
-          const chips = document.createElement('div');
-          chips.className = 'chips';
-          coordServices[svcName].forEach(nodeId => {
-            const btn = document.createElement('button');
-            btn.className = 'btn-secondary node-chip';
-            btn.textContent = nodeId;
-            btn.dataset.svc = svcName;
-            btn.dataset.node = nodeId;
-            btn.onclick = () => connect(base, svcName, nodeId);
-            chips.appendChild(btn);
-          });
-          group.appendChild(chips);
-          list.appendChild(group);
-        });
-      }
+
+      buildQuickTab(names);
+      buildFullTab(names);
+
       document.getElementById('step1').style.display = 'none';
       document.getElementById('step2').style.display = 'block';
     } catch (e) {
@@ -299,85 +450,288 @@
     }
   };
 
-  // ── Step 2: connect to service ─────────────────────────────────────────────
-  async function connect(coordBase, svcName, nodeId) {
-    document.querySelectorAll('#service-list button').forEach(b => b.disabled = true);
-    log('Connecting to "' + svcName + '" via node ' + nodeId + '…');
+  function buildQuickTab(names) {
+    const container = document.getElementById('quick-service-chips');
+    container.innerHTML = '';
+    if (names.length === 0) {
+      container.innerHTML = '<span style="color:#64748b;font-size:0.85rem">No services registered.</span>';
+      return;
+    }
+    names.forEach(svcName => {
+      const btn = document.createElement('button');
+      btn.className = 'service-chip';
+      btn.textContent = svcName;
+      btn.onclick = () => quickConnect(svcName);
+      container.appendChild(btn);
+    });
+  }
 
+  function buildFullTab(names) {
+    const container = document.getElementById('full-service-groups');
+    container.innerHTML = '';
+    if (names.length === 0) {
+      container.innerHTML = '<span style="color:#64748b;font-size:0.85rem">No services registered.</span>';
+      return;
+    }
+    names.forEach(svcName => {
+      const group = document.createElement('div');
+      group.style.marginBottom = '14px';
+
+      const label = document.createElement('div');
+      label.style.cssText = 'font-size:0.8rem;font-weight:600;color:#94a3b8;margin-bottom:6px';
+      label.textContent = svcName;
+      group.appendChild(label);
+
+      const chips = document.createElement('div');
+      chips.className = 'chips';
+      coordServices[svcName].forEach(nodeId => {
+        const btn = document.createElement('button');
+        btn.className = 'btn-secondary node-chip chip';
+        btn.textContent = nodeId;
+        btn.onclick = () => fullConnect(nodeId, svcName);
+        chips.appendChild(btn);
+      });
+      group.appendChild(chips);
+      container.appendChild(group);
+    });
+  }
+
+  // ── Quick connect: service → random node → chat ───────────────────────────
+  async function quickConnect(svcName) {
+    const nodes = coordServices[svcName] || [];
+    if (nodes.length === 0) { log('No nodes for ' + svcName, 'warn'); return; }
+    const nodeId = nodes[Math.floor(Math.random() * nodes.length)];
+    log('Quick connect: "' + svcName + '" via node ' + nodeId);
+    document.querySelectorAll('#quick-service-chips button').forEach(b => b.disabled = true);
     try {
-      pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
-      pc.onconnectionstatechange = () => {
-        const s = pc.connectionState;
-        log('Connection state: ' + s, s === 'connected' ? 'ok' : s === 'failed' ? 'error' : 'info');
-        if (s === 'connected') setStatus('open', 'connected');
-        if (s === 'disconnected' || s === 'failed') setStatus('closed', s);
-      };
-
-      dc = pc.createDataChannel('forward', { ordered: true });
-
-      // Create offer and gather ICE.
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      log('Gathering ICE candidates…');
-      setStatus('connecting', 'gathering ICE…');
-      await new Promise(resolve => {
-        if (pc.iceGatheringState === 'complete') { resolve(); return; }
-        pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === 'complete') resolve(); };
-      });
-
-      // Post offer to coordinator.
-      log('Posting offer to coordinator…');
-      const resp = await fetch(coordBase + '/offer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ service: svcName, nodeId, offer: pc.localDescription }),
-      });
-      if (!resp.ok) {
-        const txt = await resp.text();
-        throw new Error('coordinator /offer: HTTP ' + resp.status + ' — ' + txt.trim());
-      }
-      const answer = await resp.json();
-      await pc.setRemoteDescription(answer);
-      log('Remote description set — waiting for data channel…');
-      setStatus('connecting', 'connecting…');
-
-      // Wait for DC open.
-      await new Promise((resolve, reject) => {
-        if (dc.readyState === 'open') { resolve(); return; }
-        dc.onopen = resolve;
-        dc.onerror = e => reject(e.error ?? new Error('DC error'));
-      });
-      log('Data channel open — handshaking…', 'ok');
-
-      // Send service name, await "ok".
-      await new Promise((resolve, reject) => {
-        dc.send(svcName);
-        dc.onmessage = e => {
-          const raw = typeof e.data === 'string' ? e.data : new TextDecoder().decode(e.data);
-          if (raw === 'ok') resolve();
-          else reject(new Error(raw));
-        };
-      });
-
+      await openDataChannel(nodeId, svcName);
+      // Send service name, await ok
+      await dcHandshake(svcName);
       log('Connected to "' + svcName + '"', 'ok');
-      setStatus('open', 'connected');
-      activateChat();
-      document.getElementById('step2').style.display = 'none';
-      const chat = document.getElementById('step-chat');
-      chat.style.display = 'flex';
-      chat.style.flexDirection = 'column';
-      chat.style.flex = '1';
-      document.getElementById('main').style.justifyContent = 'flex-start';
-      document.getElementById('chat-input').focus();
+      setStatus('open', 'connected to ' + svcName);
+      showChat(svcName);
     } catch (e) {
       log('Connect failed: ' + e.message, 'error');
       setStatus('closed', 'error');
-      document.querySelectorAll('#service-list button').forEach(b => b.disabled = false);
+      document.querySelectorAll('#quick-service-chips button').forEach(b => b.disabled = false);
+    }
+  }
+
+  // ── Full connect: node → REPL panel ───────────────────────────────────────
+  async function fullConnect(nodeId, hintSvc) {
+    log('Full connect: node ' + nodeId);
+    document.querySelectorAll('#full-service-groups button').forEach(b => b.disabled = true);
+    currentNodeId = nodeId;
+    try {
+      await openDataChannel(nodeId, hintSvc);
+      log('Data channel open', 'ok');
+      setStatus('open', 'connected to node ' + nodeId);
+      showReplPanel(nodeId, hintSvc);
+    } catch (e) {
+      log('Connect failed: ' + e.message, 'error');
+      setStatus('closed', 'error');
+      document.querySelectorAll('#full-service-groups button').forEach(b => b.disabled = false);
+    }
+  }
+
+  // ── WebRTC helpers ─────────────────────────────────────────────────────────
+  async function openDataChannel(nodeId, service) {
+    pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+    pc.onconnectionstatechange = () => {
+      const s = pc.connectionState;
+      log('Connection: ' + s, s === 'connected' ? 'ok' : s === 'failed' ? 'error' : 'info');
+      if (s === 'disconnected' || s === 'failed') setStatus('closed', s);
+    };
+
+    dc = pc.createDataChannel('forward', { ordered: true });
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    log('Gathering ICE…');
+    setStatus('connecting', 'gathering ICE…');
+    await new Promise(resolve => {
+      if (pc.iceGatheringState === 'complete') { resolve(); return; }
+      pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === 'complete') resolve(); };
+    });
+
+    log('Posting offer…');
+    const resp = await fetch(coordBase + '/offer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ service, nodeId, offer: pc.localDescription }),
+    });
+    if (!resp.ok) {
+      const txt = await resp.text();
+      throw new Error('coordinator /offer: HTTP ' + resp.status + ' — ' + txt.trim());
+    }
+    const answer = await resp.json();
+    await pc.setRemoteDescription(answer);
+    log('Waiting for data channel…');
+    setStatus('connecting', 'connecting…');
+
+    await new Promise((resolve, reject) => {
+      if (dc.readyState === 'open') { resolve(); return; }
+      dc.onopen = resolve;
+      dc.onerror = e => reject(e.error ?? new Error('DC error'));
+    });
+  }
+
+  // Send a single command and wait for one reply.
+  function dcSend(text) {
+    return new Promise((resolve, reject) => {
+      const prev = dc.onmessage;
+      dc.onmessage = e => {
+        dc.onmessage = prev;
+        const raw = typeof e.data === 'string' ? e.data : new TextDecoder().decode(e.data);
+        resolve(raw);
+      };
+      dc.onerror = e => reject(e.error ?? new Error('DC error'));
+      dc.send(text);
+    });
+  }
+
+  async function dcHandshake(svcName) {
+    const reply = await dcSend(svcName);
+    if (reply !== 'ok') throw new Error(reply);
+  }
+
+  // ── REPL panel ─────────────────────────────────────────────────────────────
+  function showReplPanel(nodeId, hintSvc) {
+    document.getElementById('step2').style.display = 'none';
+    document.getElementById('node-panel').style.display = 'block';
+
+    document.getElementById('node-info').textContent = 'Node: ' + nodeId;
+    document.getElementById('repl-services').style.display = 'none';
+    document.getElementById('repl-svc-chips').innerHTML = '';
+    document.getElementById('ping-result').textContent = '';
+    document.getElementById('ping-result').className = 'action-result';
+    document.getElementById('verify-result').textContent = '';
+    document.getElementById('verify-result').className = 'action-result';
+
+    // Set up persistent message listener for REPL (not one-shot)
+    dc.onmessage = null;
+    dc.onclose = () => { log('Connection closed', 'warn'); setStatus('closed', 'disconnected'); };
+    dc.onerror = e => log('DC error: ' + (e.error?.message ?? e), 'error');
+  }
+
+  document.getElementById('btn-ping').onclick = async () => {
+    if (!dc || dc.readyState !== 'open') return;
+    const result = document.getElementById('ping-result');
+    result.textContent = '…';
+    result.className = 'action-result';
+    const t0 = performance.now();
+    const reply = await dcSend('ping');
+    const rtt = Math.round(performance.now() - t0);
+    result.textContent = reply === 'pong' ? 'pong · ' + rtt + ' ms' : reply;
+    result.className = 'action-result' + (reply === 'pong' ? ' ok' : ' err');
+  };
+
+  document.getElementById('btn-list').onclick = async () => {
+    if (!dc || dc.readyState !== 'open') return;
+    const svcDiv = document.getElementById('repl-services');
+    svcDiv.style.display = 'none';
+    const reply = await dcSend('list');
+    try {
+      const svcs = JSON.parse(reply);
+      if (Array.isArray(svcs) && svcs.length > 0) {
+        svcDiv.style.display = 'block';
+        const chips = document.getElementById('repl-svc-chips');
+        chips.innerHTML = '';
+        svcs.forEach(svc => {
+          const btn = document.createElement('button');
+          btn.className = 'service-chip btn-sm';
+          btn.textContent = svc;
+          btn.onclick = () => replConnectService(svc);
+          chips.appendChild(btn);
+        });
+      }
+    } catch (_) {}
+  };
+
+  document.getElementById('btn-verify').onclick = async () => {
+    if (!dc || dc.readyState !== 'open') return;
+    const result = document.getElementById('verify-result');
+    const setResult = (text, ok) => {
+      result.textContent = text;
+      result.className = 'action-result ' + (ok ? 'ok' : 'err');
+    };
+
+    if (!crypto.subtle) {
+      setResult('requires HTTPS or localhost', false);
+      return;
+    }
+
+    result.textContent = '…';
+    result.className = 'action-result';
+
+    // 1. Generate r_client, compute commitment = sha256(r_client)
+    const rClient = crypto.getRandomValues(new Uint8Array(32));
+    const commitment = await sha256(rClient);
+
+    const resp1 = await dcSend('challenge ' + bytesToHex(commitment));
+    if (!resp1.startsWith('challenge-response ')) {
+      setResult('unexpected: ' + resp1, false); return;
+    }
+    const rNode = hexToBytes(resp1.slice('challenge-response '.length).trim());
+
+    // 2. Send verify with r_client
+    const resp2 = await dcSend('verify ' + bytesToHex(rClient));
+    if (!resp2.startsWith('proof ')) {
+      setResult('no proof: ' + resp2, false); return;
+    }
+
+    // 3. Parse proof: "proof <pubkeyHex> <sigHex>"
+    const parts = resp2.split(' ');
+    if (parts.length !== 3) { setResult('malformed proof', false); return; }
+    const claimedPubHex = parts[1];
+    const sigBytes = hexToBytes(parts[2]);
+
+    // 4. Verify signature with claimed pubkey
+    const prefix = new TextEncoder().encode('rtc-mesh:dc-challenge:');
+    const joint = xorBytes(rClient, rNode);
+    const msg = new Uint8Array(prefix.length + joint.length);
+    msg.set(prefix); msg.set(joint, prefix.length);
+
+    let sigValid = false;
+    try {
+      const cryptoKey = await crypto.subtle.importKey(
+        'raw', hexToBytes(claimedPubHex), { name: 'Ed25519' }, false, ['verify']
+      );
+      sigValid = await crypto.subtle.verify({ name: 'Ed25519' }, cryptoKey, sigBytes, msg);
+    } catch (e) {
+      setResult('crypto error: ' + e.message, false); return;
+    }
+    if (!sigValid) { setResult('✗ invalid signature', false); return; }
+
+    // 5. Derive nodeId from claimed pubkey and check it matches what we clicked
+    const derivedId = await pubkeyToNodeId(claimedPubHex);
+    if (derivedId !== currentNodeId) { setResult('✗ nodeId mismatch', false); return; }
+
+    setResult('✓ identity verified', true);
+  };
+
+  async function replConnectService(svcName) {
+    document.querySelectorAll('#repl-svc-chips button').forEach(b => b.disabled = true);
+    try {
+      const reply = await dcSend(svcName);
+      if (reply !== 'ok') throw new Error(reply);
+      showChat(svcName);
+    } catch (e) {
+      log('Connect to "' + svcName + '" failed: ' + e.message, 'error');
+      document.querySelectorAll('#repl-svc-chips button').forEach(b => b.disabled = false);
     }
   }
 
   // ── Chat ───────────────────────────────────────────────────────────────────
-  function activateChat() {
+  function showChat(svcName) {
+    document.getElementById('step2').style.display = 'none';
+    document.getElementById('node-panel').style.display = 'none';
+    document.getElementById('chat-svc-label').textContent = 'Connected to: ' + svcName;
+    document.getElementById('chat-messages').innerHTML = '';
+    const chat = document.getElementById('step-chat');
+    chat.style.display = 'flex';
+    document.getElementById('main').style.justifyContent = 'flex-start';
+
     dc.onmessage = e => {
       const raw = typeof e.data === 'string' ? e.data : new TextDecoder().decode(e.data);
       const msgs = document.getElementById('chat-messages');
@@ -389,6 +743,7 @@
     };
     dc.onclose = () => { log('Data channel closed', 'warn'); setStatus('closed', 'disconnected'); };
     dc.onerror = e => log('Data channel error: ' + (e.error?.message ?? e), 'error');
+    document.getElementById('chat-input').focus();
   }
 
   function sendMsg() {
@@ -405,6 +760,19 @@
     input.value = '';
   }
 
+  function reset() {
+    if (dc) { try { dc.close(); } catch(_) {} dc = null; }
+    if (pc) { try { pc.close(); } catch(_) {} pc = null; }
+    currentNodeId = '';
+    setStatus('', 'not connected');
+    document.getElementById('step-chat').style.display = 'none';
+    document.getElementById('node-panel').style.display = 'none';
+    document.getElementById('step2').style.display = 'block';
+    // Re-enable all chips
+    document.querySelectorAll('#quick-service-chips button, #full-service-groups button').forEach(b => b.disabled = false);
+  }
+
+  document.getElementById('btn-reset').onclick = reset;
   document.getElementById('btn-send').onclick = sendMsg;
   document.getElementById('chat-input').addEventListener('keydown', e => {
     if (e.key === 'Enter') sendMsg();

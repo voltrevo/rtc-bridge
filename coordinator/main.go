@@ -89,6 +89,7 @@ func cmdRun(args []string) {
 	coord := newCoordinator()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", coord.handleNodeWS)
+	mux.HandleFunc("/nodes", coord.handleNodes)
 	mux.HandleFunc("/services", coord.handleServices)
 	mux.HandleFunc("/offer", coord.handleOffer)
 
@@ -126,12 +127,13 @@ type pendingOffer struct {
 }
 
 type node struct {
-	id       string
-	services []string
-	conn     *websocket.Conn
-	lastSeen time.Time
-	pending  map[string]*pendingOffer // requestId → waiter
-	mu       sync.Mutex
+	id        string
+	services  []string
+	publicKey []byte
+	conn      *websocket.Conn
+	lastSeen  time.Time
+	pending   map[string]*pendingOffer // requestId → waiter
+	mu        sync.Mutex
 }
 
 type coordinator struct {
@@ -205,11 +207,12 @@ func (c *coordinator) handleNodeWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	n := &node{
-		id:       reg.NodeID,
-		services: reg.Services,
-		conn:     conn,
-		lastSeen: time.Now(),
-		pending:  make(map[string]*pendingOffer),
+		id:        reg.NodeID,
+		services:  reg.Services,
+		publicKey: reg.PublicKey,
+		conn:      conn,
+		lastSeen:  time.Now(),
+		pending:   make(map[string]*pendingOffer),
 	}
 	c.registerNode(n)
 	defer c.unregisterNode(n.id)
@@ -296,6 +299,31 @@ func (c *coordinator) pruneLoop() {
 // the read loop's deadline handles drops; we rely on WS ping/pong).
 
 // ── HTTP handlers ─────────────────────────────────────────────────────────────
+
+// GET /nodes → [{nodeId, publicKey (hex), services}, ...]
+func (c *coordinator) handleNodes(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET only", http.StatusMethodNotAllowed)
+		return
+	}
+	type nodeInfo struct {
+		NodeID    string   `json:"nodeId"`
+		PublicKey string   `json:"publicKey"` // hex
+		Services  []string `json:"services"`
+	}
+	var list []nodeInfo
+	c.mu.RLock()
+	for _, n := range c.nodes {
+		list = append(list, nodeInfo{
+			NodeID:    n.id,
+			PublicKey: fmt.Sprintf("%x", n.publicKey),
+			Services:  n.services,
+		})
+	}
+	c.mu.RUnlock()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(list)
+}
 
 // GET /services → {"echo":["nodeId1","nodeId2"],...}
 func (c *coordinator) handleServices(w http.ResponseWriter, r *http.Request) {
