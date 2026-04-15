@@ -89,12 +89,25 @@
     .btn-primary   { background: #6366f1; color: #fff; }
     .btn-secondary { background: #2d3148; color: #e2e8f0; }
 
-    /* Service chips */
+    /* Service list */
+    .service-group {
+      margin-bottom: 14px;
+    }
+    .service-group:last-child { margin-bottom: 0; }
+    .service-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #94a3b8;
+      margin-bottom: 6px;
+    }
     .chips {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
-      margin-top: 4px;
+    }
+    .node-chip {
+      font-family: monospace;
+      font-size: 0.78rem;
     }
 
     /* Chat */
@@ -189,11 +202,11 @@
       <button class="btn-primary" id="btn-fetch">Fetch Services</button>
     </div>
 
-    <!-- Step 2: select service -->
+    <!-- Step 2: select service + node -->
     <div class="step" id="step2" style="display:none">
       <h2>Step 2 — Select service</h2>
-      <p>Click a service to connect. WebRTC negotiation happens automatically.</p>
-      <div class="chips" id="service-chips"></div>
+      <p>Click a node to connect. WebRTC negotiation happens automatically.</p>
+      <div id="service-list"></div>
     </div>
 
     <!-- Chat -->
@@ -251,17 +264,31 @@
       coordServices = await resp.json();
       const names = Object.keys(coordServices).sort();
       log('Services: ' + (names.join(', ') || 'none'), names.length ? 'ok' : 'warn');
-      const chips = document.getElementById('service-chips');
-      chips.innerHTML = '';
+      const list = document.getElementById('service-list');
+      list.innerHTML = '';
       if (names.length === 0) {
-        chips.innerHTML = '<span style="color:#64748b;font-size:0.85rem">No services registered.</span>';
+        list.innerHTML = '<span style="color:#64748b;font-size:0.85rem">No services registered.</span>';
       } else {
-        names.forEach(name => {
-          const btn = document.createElement('button');
-          btn.className = 'btn-secondary';
-          btn.textContent = name;
-          btn.onclick = () => connect(base, name);
-          chips.appendChild(btn);
+        names.forEach(svcName => {
+          const group = document.createElement('div');
+          group.className = 'service-group';
+          const label = document.createElement('div');
+          label.className = 'service-label';
+          label.textContent = svcName;
+          group.appendChild(label);
+          const chips = document.createElement('div');
+          chips.className = 'chips';
+          coordServices[svcName].forEach(nodeId => {
+            const btn = document.createElement('button');
+            btn.className = 'btn-secondary node-chip';
+            btn.textContent = nodeId;
+            btn.dataset.svc = svcName;
+            btn.dataset.node = nodeId;
+            btn.onclick = () => connect(base, svcName, nodeId);
+            chips.appendChild(btn);
+          });
+          group.appendChild(chips);
+          list.appendChild(group);
         });
       }
       document.getElementById('step1').style.display = 'none';
@@ -273,16 +300,8 @@
   };
 
   // ── Step 2: connect to service ─────────────────────────────────────────────
-  async function connect(coordBase, svcName) {
-    document.querySelectorAll('#service-chips button').forEach(b => b.disabled = true);
-
-    const nodeIds = coordServices[svcName];
-    if (!nodeIds || nodeIds.length === 0) {
-      log('No nodes for service ' + svcName, 'error');
-      document.querySelectorAll('#service-chips button').forEach(b => b.disabled = false);
-      return;
-    }
-    const nodeId = nodeIds[0];
+  async function connect(coordBase, svcName, nodeId) {
+    document.querySelectorAll('#service-list button').forEach(b => b.disabled = true);
     log('Connecting to "' + svcName + '" via node ' + nodeId + '…');
 
     try {
@@ -353,7 +372,7 @@
     } catch (e) {
       log('Connect failed: ' + e.message, 'error');
       setStatus('closed', 'error');
-      document.querySelectorAll('#service-chips button').forEach(b => b.disabled = false);
+      document.querySelectorAll('#service-list button').forEach(b => b.disabled = false);
     }
   }
 
