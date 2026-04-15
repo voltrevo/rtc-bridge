@@ -88,6 +88,8 @@ func cmdRun(args []string) {
 
 	coord := newCoordinator()
 	mux := http.NewServeMux()
+	mux.HandleFunc("/", coord.handleLanding)
+	mux.HandleFunc("/api/stats", coord.handleStats)
 	mux.HandleFunc("/ws", coord.handleNodeWS)
 	mux.HandleFunc("/nodes", coord.handleNodes)
 	mux.HandleFunc("/services", coord.handleServices)
@@ -139,6 +141,7 @@ type node struct {
 type coordinator struct {
 	mu    sync.RWMutex
 	nodes map[string]*node // nodeId → node
+	sdp   sdpTracker
 }
 
 func newCoordinator() *coordinator {
@@ -422,6 +425,7 @@ func (c *coordinator) handleOffer(w http.ResponseWriter, r *http.Request) {
 	// Wait for answer (30s timeout).
 	select {
 	case ans := <-p.ch:
+		c.sdp.record()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(ans.Answer)
 	case <-time.After(30 * time.Second):
