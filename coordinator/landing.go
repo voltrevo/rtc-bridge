@@ -1,13 +1,16 @@
 package main
 
 import (
+	"embed"
 	"encoding/json"
 	"math"
 	"net/http"
-	"os"
 	"sync"
 	"time"
 )
+
+//go:embed static/demo.html static/rtc-mesh.js static/rtc-mesh.js.map
+var staticFiles embed.FS
 
 // sdpTau is the EWMA time constant for SDP exchange rate (6 hours in seconds).
 const sdpTau = 6 * 3600.0
@@ -64,13 +67,12 @@ func (c *coordinator) handleStats(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// serveStatic returns a handler that reads a file from disk on each request.
-// path is relative to the coordinator's working directory.
+// serveStatic returns a handler that serves an embedded static file.
 func serveStatic(path, contentType string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		data, err := os.ReadFile(path)
+		data, err := staticFiles.ReadFile(path)
 		if err != nil {
-			http.Error(w, "not found (run: cd client && npm run build)", http.StatusNotFound)
+			http.Error(w, "not found", http.StatusNotFound)
 			return
 		}
 		w.Header().Set("Content-Type", contentType)
