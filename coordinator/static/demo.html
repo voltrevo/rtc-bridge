@@ -129,13 +129,10 @@
     .result.ok  { color: #3fb950; }
     .result.err { color: #f85149; }
 
-    .terminal {
-      background: #010409;
-      border: 1px solid #30363d;
-      border-radius: 10px;
-      padding: 0.75rem;
-      width: 100%;
-      max-width: 600px;
+    #step4 {
+      border-top: 1px solid #30363d;
+      padding-top: 0.75rem;
+      margin-top: 0.25rem;
       display: flex;
       flex-direction: column;
       gap: 0;
@@ -194,38 +191,40 @@
     <div class="row" id="node-list" style="gap:0.75rem;margin-top:0.4rem"></div>
   </div>
 
-  <!-- Step 3: connected node REPL -->
+  <!-- Step 3: connected node panel -->
   <div id="step3" hidden>
     <div class="repl">
       <div>
         <div class="section-label" id="conn-label">Connecting to</div>
         <div class="node-id" id="connected-id"></div>
       </div>
-      <div class="repl-actions">
-        <button onclick="doPing()">Ping</button>
-        <button onclick="doList()">List services</button>
-        <button onclick="doVerify()">Verify node</button>
-        <button class="danger" onclick="doDisconnect()">Disconnect</button>
-      </div>
-      <div class="result" id="repl-result"></div>
-      <div>
-        <div class="section-label" style="margin-bottom:0.4rem">Bridge to service</div>
-        <div class="row">
-          <select id="svc-select" style="background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#e6edf3;padding:0.35rem 0.6rem;font-size:0.85rem"></select>
-          <button class="primary" onclick="doBridge()">Bridge</button>
+
+      <!-- REPL controls (hidden while bridged) -->
+      <div id="repl-controls">
+        <div class="repl-actions">
+          <button onclick="doPing()">Ping</button>
+          <button onclick="doList()">List services</button>
+          <button onclick="doVerify()">Verify node</button>
+          <button class="danger" onclick="doDisconnect()">Disconnect</button>
+        </div>
+        <div class="result" id="repl-result"></div>
+        <div>
+          <div class="section-label" style="margin-bottom:0.4rem">Bridge to service</div>
+          <div class="row">
+            <select id="svc-select" style="background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#e6edf3;padding:0.35rem 0.6rem;font-size:0.85rem"></select>
+            <button class="primary" onclick="doBridge()">Bridge</button>
+          </div>
         </div>
       </div>
-    </div>
-  </div>
 
-  <!-- Step 4: TCP bridge terminal -->
-  <div id="step4" hidden>
-    <div class="terminal">
-      <div class="term-log" id="term-log"></div>
-      <div class="term-input-row">
-        <input class="term-input" id="term-input" placeholder="send…" onkeydown="termKey(event)">
-        <button onclick="termSend()">Send</button>
-        <button class="danger" onclick="doDisconnect()">×</button>
+      <!-- Step 4: TCP bridge terminal (nested inside node panel) -->
+      <div id="step4" hidden>
+        <div class="term-log" id="term-log"></div>
+        <div class="term-input-row">
+          <input class="term-input" id="term-input" placeholder="send…" onkeydown="termKey(event)">
+          <button onclick="termSend()">Send</button>
+          <button class="danger" onclick="closeBridge()">×</button>
+        </div>
       </div>
     </div>
   </div>
@@ -285,7 +284,7 @@
     async function connectNode(nodeId, service) {
       try {
         channel = await connect(coordinator, nodeId, service);
-        channel.dc.addEventListener('close', () => doDisconnect());
+        channel.dc.addEventListener('close', () => closeBridge());
         return true;
       } catch(e) {
         channel = null;
@@ -297,6 +296,7 @@
       setReplResult('Connecting…', '');
       document.getElementById('conn-label').textContent = 'Connecting to';
       show('step3');
+      show('repl-controls');
       hide('step4');
       document.getElementById('connected-id').textContent = nodeId;
       populateServiceSelect(service);
@@ -389,10 +389,17 @@
       hide('step4');
     };
 
+    window.closeBridge = () => {
+      if (channel) { channel.close(); channel = null; }
+      hide('step4');
+      show('repl-controls');
+      setReplResult('Disconnected', '');
+    };
+
     // ── Terminal (bridge mode) ─────────────────────────────────────────────
     function startTerminal() {
+      hide('repl-controls');
       show('step4');
-      hide('step3');
       const log = document.getElementById('term-log');
       log.innerHTML = '';
       termLine('info', '— bridged —');
