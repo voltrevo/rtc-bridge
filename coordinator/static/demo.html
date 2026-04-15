@@ -262,15 +262,19 @@
       for (const n of nodes) {
         const card = document.createElement('div');
         card.className = 'node-card';
+        card.style.cursor = 'pointer';
         card.innerHTML = `
           <div class="node-id">${n.nodeId}</div>
           <div class="row" style="gap:0.3rem"></div>`;
+        // Card click → connect to node, open REPL
+        card.onclick = () => openChannel(n.nodeId, (n.services || [])[0]);
         const chips = card.querySelector('.row');
         for (const svc of (n.services || [])) {
           const chip = document.createElement('span');
           chip.className = 'chip';
           chip.innerHTML = `<span class="svc-dot"></span>${svc}`;
-          chip.onclick = () => openChannel(n.nodeId, svc);
+          // Chip click → connect + immediately bridge to that service
+          chip.onclick = (e) => { e.stopPropagation(); openAndBridge(n.nodeId, svc); };
           chips.appendChild(chip);
         }
         list.appendChild(card);
@@ -292,6 +296,11 @@
         setReplResult(String(e), 'err');
         channel = null;
       }
+    };
+
+    window.openAndBridge = async (nodeId, service) => {
+      await openChannel(nodeId, service);
+      if (channel) await doBridge(service);
     };
 
     function populateServiceSelect(selected) {
@@ -343,9 +352,9 @@
       } catch(e) { setReplResult(String(e), 'err'); }
     };
 
-    window.doBridge = async () => {
+    window.doBridge = async (svc) => {
       if (!channel) return;
-      const svc = document.getElementById('svc-select').value;
+      svc = svc ?? document.getElementById('svc-select').value;
       setReplResult(`Bridging to ${svc}…`, '');
       try {
         await channel.bridge(svc);
