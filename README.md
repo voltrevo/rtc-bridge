@@ -69,6 +69,7 @@ cd coordinator && ./coordinator init && ./coordinator run
 | Endpoint | Method | Description |
 |---|---|---|
 | `/services` | GET | Returns `{"svcName": ["nodeId", …], …}` |
+| `/nodes` | GET | Returns `[{nodeId, publicKey (hex), services}, …]` |
 | `/offer` | POST | `{service, nodeId, offer}` → SDP answer |
 | `/ws` | WS | Node registration endpoint |
 
@@ -80,8 +81,12 @@ cd coordinator && ./coordinator init && ./coordinator run
 3. Browser fetches `/services`, picks a node, and POSTs an SDP offer to `/offer`.
 4. Coordinator forwards the offer to the node over WebSocket; node answers.
 5. Browser sets the answer and the WebRTC connection completes.
-6. Browser sends the service name as the first data channel message; node
-   responds `ok` and then bridges data to TCP.
+6. Before bridging to TCP, the data channel runs a command loop:
+   - `ping` → `pong`
+   - `list` → JSON array of service names
+   - `challenge <commitment>` / `verify <r_client>` → `proof <pubkey> <sig>`
+     (node proves ed25519 identity; client can verify the nodeId matches)
+   - `<service-name>` → `ok`, then the channel is bridged to TCP
 
 ## Building
 
