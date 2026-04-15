@@ -230,6 +230,7 @@ export async function connect(
 ): Promise<NodeChannel> {
   const pc = new RTCPeerConnection(config ?? DEFAULT_CONFIG);
   const dc = pc.createDataChannel('proxy');
+  dc.binaryType = 'arraybuffer';
 
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
