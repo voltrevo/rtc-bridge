@@ -244,6 +244,27 @@ const landingHTML = `<!DOCTYPE html>
     .get  { background: #0d419d22; color: #58a6ff; border: 1px solid #1f6feb44; }
     .post { background: #1a7f3722; color: #3fb950; border: 1px solid #238636aa; }
     .ws   { background: #6e40c922; color: #a371f7; border: 1px solid #8957e544; }
+
+    .api-table a {
+      color: inherit;
+      text-decoration: none;
+    }
+    .api-table a:hover code { border-color: #58a6ff; color: #58a6ff; }
+
+    .cta {
+      display: inline-block;
+      margin-top: 2rem;
+      padding: 0.6rem 1.4rem;
+      background: #1f6feb;
+      border: 1px solid #388bfd;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 0.9rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background 0.15s;
+    }
+    .cta:hover { background: #388bfd; }
   </style>
 </head>
 <body>
@@ -284,11 +305,11 @@ const landingHTML = `<!DOCTYPE html>
         <td>Node registration &amp; signaling</td>
       </tr>
       <tr>
-        <td><span class="method get">GET</span><code>/nodes</code></td>
+        <td><span class="method get">GET</span><a href="/nodes"><code>/nodes</code></a></td>
         <td>List nodes with public keys &amp; services</td>
       </tr>
       <tr>
-        <td><span class="method get">GET</span><code>/services</code></td>
+        <td><span class="method get">GET</span><a href="/services"><code>/services</code></a></td>
         <td>Map of service name → node IDs</td>
       </tr>
       <tr>
@@ -297,6 +318,8 @@ const landingHTML = `<!DOCTYPE html>
       </tr>
     </tbody>
   </table>
+
+  <a class="cta" href="/demo.html">Try the demo →</a>
 
   <script>
     (async () => {
