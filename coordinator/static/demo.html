@@ -208,13 +208,7 @@
           <button class="danger" onclick="doDisconnect()">Disconnect</button>
         </div>
         <div class="result" id="repl-result"></div>
-        <div>
-          <div class="section-label" style="margin-bottom:0.4rem">Bridge to service</div>
-          <div class="row">
-            <select id="svc-select" style="background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#e6edf3;padding:0.35rem 0.6rem;font-size:0.85rem"></select>
-            <button class="primary" onclick="doBridge()">Bridge</button>
-          </div>
-        </div>
+        <div id="svc-chips" class="row" style="gap:0.3rem;flex-wrap:wrap"></div>
       </div>
 
       <!-- Service bridge panels appended here dynamically -->
@@ -282,7 +276,7 @@
       setReplResult('Connecting…', '');
       document.getElementById('conn-label').textContent = 'Connecting to';
       document.getElementById('connected-id').textContent = nodeId;
-      populateServiceSelect(service);
+      document.getElementById('svc-chips').innerHTML = '';
       show('step3');
       show('repl-controls');
       try {
@@ -318,20 +312,6 @@
       }
     };
 
-    function populateServiceSelect(selected) {
-      const sel = document.getElementById('svc-select');
-      sel.innerHTML = '';
-      addOption(sel, selected);
-    }
-
-    function addOption(sel, svc) {
-      if (![...sel.options].some(o => o.value === svc)) {
-        const o = document.createElement('option');
-        o.value = o.textContent = svc;
-        sel.appendChild(o);
-      }
-    }
-
     // ── REPL actions ───────────────────────────────────────────────────────
     window.doPing = async () => {
       if (!replChannel) return;
@@ -347,9 +327,16 @@
       setReplResult('…', '');
       try {
         const svcs = await replChannel.list();
-        const sel = document.getElementById('svc-select');
-        svcs.forEach(s => addOption(sel, s));
-        setReplResult(svcs.join(', '), 'ok');
+        setReplResult('', '');
+        const chips = document.getElementById('svc-chips');
+        chips.innerHTML = '';
+        for (const svc of svcs) {
+          const chip = document.createElement('span');
+          chip.className = 'chip';
+          chip.innerHTML = `<span class="svc-dot"></span>${svc}`;
+          chip.onclick = () => doBridge(svc);
+          chips.appendChild(chip);
+        }
       } catch(e) { setReplResult(String(e), 'err'); }
     };
 
@@ -366,16 +353,15 @@
       } catch(e) { setReplResult(String(e), 'err'); }
     };
 
-    // Bridge button: creates a NEW connection for this service (REPL stays alive).
+    // Chip click from service list: new connection per service, REPL stays alive.
     window.doBridge = async (svc) => {
       if (!replChannel || !currentNodeId) return;
-      svc = svc ?? document.getElementById('svc-select').value;
       setReplResult(`Connecting to ${svc}…`, '');
       try {
         const ch = await connect(coordinator, currentNodeId, svc);
         await ch.bridge(svc);
         setReplResult('', '');
-        addServicePanel(ch, svc, null); // null = closing panel doesn't close node
+        addServicePanel(ch, svc, null);
       } catch(e) {
         setReplResult(String(e), 'err');
       }
