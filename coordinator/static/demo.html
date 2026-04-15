@@ -29,6 +29,8 @@
       background-clip: text;
     }
 
+    .home-link { text-decoration: none; cursor: pointer; -webkit-text-fill-color: transparent; }
+
     .row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 
     input[type=text] {
@@ -177,7 +179,7 @@
   </style>
 </head>
 <body>
-  <h1>rtc-bridge demo</h1>
+  <h1><a class="home-link" href="/">rtc-bridge</a> demo</h1>
 
   <!-- Step 1: coordinator URL -->
   <div class="row" id="step1">
