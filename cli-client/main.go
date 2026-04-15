@@ -22,12 +22,18 @@ import (
 )
 
 func main() {
-	signalURL := flag.String("signal", "http://127.0.0.1:8765", "webrtc-forward HTTP signaling URL (base)")
-	coordURL := flag.String("coordinator", "", "coordinator base URL (uses /services + /offer instead of --signal)")
-	nodeID := flag.String("node", "", "nodeId to connect to (optional when using --coordinator; auto-picks first if blank)")
-	service := flag.String("service", "", "service name to request (required)")
-	messages := flag.String("messages", "hello,ping,goodbye", "comma-separated messages to send")
-	flag.Parse()
+	fs := flag.NewFlagSet("cli-client", flag.ContinueOnError)
+	signalURL := fs.String("signal", "http://127.0.0.1:8765", "webrtc-forward HTTP signaling URL (base)")
+	coordURL := fs.String("coordinator", "", "coordinator base URL (uses /services + /offer instead of --signal)")
+	nodeID := fs.String("node", "", "nodeId to connect to (optional when using --coordinator; auto-picks first if blank)")
+	service := fs.String("service", "", "service name to request (required)")
+	messages := fs.String("messages", "hello,ping,goodbye", "comma-separated messages to send")
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		if err == flag.ErrHelp {
+			os.Exit(0)
+		}
+		os.Exit(1)
+	}
 
 	if *service == "" {
 		fmt.Fprintln(os.Stderr, "error: --service is required")

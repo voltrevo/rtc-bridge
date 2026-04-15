@@ -34,6 +34,9 @@ func main() {
 		cmdRun(os.Args[2:])
 	case "init":
 		cmdInit(os.Args[2:])
+	case "-h", "--help", "help":
+		usage()
+		os.Exit(0)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command %q\n\n", os.Args[1])
 		usage()
@@ -48,9 +51,14 @@ func usage() {
 }
 
 func cmdInit(args []string) {
-	fs := flag.NewFlagSet("init", flag.ExitOnError)
+	fs := flag.NewFlagSet("init", flag.ContinueOnError)
 	configPath := fs.String("config", "config.json5", "path to write sample config")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			os.Exit(0)
+		}
+		os.Exit(1)
+	}
 	if _, err := os.Stat(*configPath); err == nil {
 		fmt.Fprintf(os.Stderr, "error: %q already exists\n", *configPath)
 		os.Exit(1)
@@ -63,9 +71,14 @@ func cmdInit(args []string) {
 }
 
 func cmdRun(args []string) {
-	fs := flag.NewFlagSet("run", flag.ExitOnError)
+	fs := flag.NewFlagSet("run", flag.ContinueOnError)
 	configPath := fs.String("config", "config.json5", "path to JSON5 config file")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			os.Exit(0)
+		}
+		os.Exit(1)
+	}
 
 	cfg, err := loadConfig(*configPath)
 	if err != nil {
