@@ -93,10 +93,25 @@ func cmdRun(args []string) {
 	mux.HandleFunc("/offer", coord.handleOffer)
 
 	fmt.Printf("coordinator listening on %s\n", cfg.Addr)
-	if err := http.ListenAndServe(cfg.Addr, mux); err != nil {
+	if err := http.ListenAndServe(cfg.Addr, corsMiddleware(mux)); err != nil {
 		fmt.Fprintf(os.Stderr, "listen: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// corsMiddleware adds permissive CORS headers so browser clients on any origin
+// can reach the coordinator's HTTP endpoints (/services, /offer).
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // ── Coordinator ───────────────────────────────────────────────────────────────
