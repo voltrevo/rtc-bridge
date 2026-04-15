@@ -4,7 +4,9 @@ Bridge browser WebRTC data channels to local TCP services, with service
 discovery and signaling handled by a coordinator server.
 
 ```
-Browser ──WebRTC──► coordinator ──WS──► rtc-mesh node ──TCP──► service
+                    ┌─ signaling ──► coordinator ◄──WS── rtc-mesh node ──TCP──► service
+Browser ────────────┤                                          ▲
+                    └─ WebRTC (direct, post-signaling) ────────┘
 ```
 
 Nodes dial out to the coordinator (no public IP or open ports required on the
