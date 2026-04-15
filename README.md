@@ -1,10 +1,10 @@
-# webrtc-forward
+# rtc-mesh
 
 Bridge browser WebRTC data channels to local TCP services, with service
 discovery and signaling handled by a coordinator server.
 
 ```
-Browser ──WebRTC──► coordinator ──WS──► webrtc-forward ──TCP──► service
+Browser ──WebRTC──► coordinator ──WS──► rtc-mesh node ──TCP──► service
 ```
 
 Nodes dial out to the coordinator (no public IP or open ports required on the
@@ -15,7 +15,7 @@ exchange SDP, then establishes a direct WebRTC connection.
 
 | Binary | Purpose |
 |---|---|
-| `webrtc-forward` | Node that bridges WebRTC data channels to local TCP services |
+| `rtc-mesh` (node) | Node that bridges WebRTC data channels to local TCP services |
 | `coordinator` | Discovery + signaling server (one per deployment) |
 | `echo` | Test TCP echo server |
 
@@ -23,7 +23,7 @@ exchange SDP, then establishes a direct WebRTC connection.
 
 ```bash
 # 1. Build
-go build -o node/webrtc-forward ./node
+go build -o node/rtc-mesh ./node
 go build -o coordinator/coordinator ./coordinator
 go build -o echo/echo ./echo
 
@@ -31,9 +31,9 @@ go build -o echo/echo ./echo
 cd coordinator && ./coordinator init && ./coordinator run
 
 # 3. Configure and start a node
-./node/webrtc-forward init   # generates config.json5 with a fresh keypair
+./node/rtc-mesh init   # generates config.json5 with a fresh keypair
 # Edit config.json5: add your service(s) and set the coordinator URL
-./node/webrtc-forward run
+./node/rtc-mesh run
 
 # 4. Open demo.html in a browser
 #    Enter the coordinator URL → fetch services → click a node → chat
@@ -86,7 +86,7 @@ cd coordinator && ./coordinator init && ./coordinator run
 ## Building
 
 ```bash
-go build -o node/webrtc-forward ./node
+go build -o node/rtc-mesh ./node
 go build -o coordinator/coordinator ./coordinator
 go build -o echo/echo ./echo
 ```
@@ -94,5 +94,5 @@ go build -o echo/echo ./echo
 ## Testing
 
 ```bash
-bash test-coordinator.sh   # end-to-end: echo ← webrtc-forward ← coordinator ← cli-client
+bash test-coordinator.sh   # end-to-end: echo ← rtc-mesh ← coordinator ← cli-client
 ```

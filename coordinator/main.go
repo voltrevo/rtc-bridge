@@ -21,7 +21,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
-	"webrtc-forward/protocol"
+	"rtc-mesh/protocol"
 )
 
 func main() {

@@ -3,7 +3,7 @@ package main
 import (
 	"crypto/ed25519"
 
-	"webrtc-forward/protocol"
+	"rtc-mesh/protocol"
 )
 
 // Identity holds the node's long-term keypair and derived nodeId.

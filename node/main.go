@@ -2,8 +2,8 @@
 //
 // Commands:
 //
-//	webrtc-forward run  [--config path]   run the forwarder (default config: config.json5)
-//	webrtc-forward init [--config path]   write a sample config file and exit
+//	rtc-mesh run  [--config path]   run the forwarder (default config: config.json5)
+//	rtc-mesh init [--config path]   write a sample config file and exit
 package main
 
 import (
@@ -45,8 +45,8 @@ func main() {
 
 func usage() {
 	fmt.Fprintf(os.Stderr, "usage:\n")
-	fmt.Fprintf(os.Stderr, "  webrtc-forward run  [--config path]   run the forwarder\n")
-	fmt.Fprintf(os.Stderr, "  webrtc-forward init [--config path]   generate a sample config file\n")
+	fmt.Fprintf(os.Stderr, "  rtc-mesh run  [--config path]   run the forwarder\n")
+	fmt.Fprintf(os.Stderr, "  rtc-mesh init [--config path]   generate a sample config file\n")
 }
 
 // ── Commands ──────────────────────────────────────────────────────────────────

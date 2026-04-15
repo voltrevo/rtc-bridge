@@ -1,5 +1,5 @@
 *.json5
-/node/webrtc-forward
+/node/rtc-mesh
 /cli-client/cli-client
 /echo/echo
 /coordinator/coordinator

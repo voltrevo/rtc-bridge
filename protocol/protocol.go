@@ -84,9 +84,9 @@ func NodeID(pub ed25519.PublicKey) string {
 }
 
 // signPayload builds the domain-separated payload that the node signs:
-// "webrtc-forward:register:" || joint
+// "rtc-mesh:register:" || joint
 func signPayload(joint []byte) []byte {
-	prefix := []byte("webrtc-forward:register:")
+	prefix := []byte("rtc-mesh:register:")
 	payload := make([]byte, len(prefix)+len(joint))
 	copy(payload, prefix)
 	copy(payload[len(prefix):], joint)
