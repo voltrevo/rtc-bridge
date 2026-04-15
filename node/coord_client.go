@@ -128,18 +128,18 @@ func connectCoordinator(ctx context.Context, url string, id *Identity, svcNames 
 			if err := json.Unmarshal(raw, &msg); err != nil {
 				continue
 			}
-			go handleCoordOffer(conn, msg, services)
+			go handleCoordOffer(conn, msg, services, id)
 		}
 	}
 }
 
-func handleCoordOffer(conn *websocket.Conn, msg protocol.OfferMsg, services map[string]string) {
+func handleCoordOffer(conn *websocket.Conn, msg protocol.OfferMsg, services map[string]string, id *Identity) {
 	var offer webrtc.SessionDescription
 	if err := json.Unmarshal(msg.Offer, &offer); err != nil {
 		fmt.Printf("[coord] bad offer JSON for request %s: %v\n", msg.RequestID, err)
 		return
 	}
-	answer, err := handleOffer(offer, services)
+	answer, err := handleOffer(offer, services, id)
 	if err != nil {
 		fmt.Printf("[coord] handleOffer error for request %s: %v\n", msg.RequestID, err)
 		return

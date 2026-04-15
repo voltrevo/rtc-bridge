@@ -7,15 +7,21 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"net"
 	"os"
 	"os/signal"
+	"sort"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -121,7 +127,9 @@ func cmdInit(args []string) {
 
 // ── WebRTC ────────────────────────────────────────────────────────────────────
 
-func handleOffer(offer webrtc.SessionDescription, services map[string]string) (*webrtc.SessionDescription, error) {
+const dcChallengePrefix = "rtc-mesh:dc-challenge:"
+
+func handleOffer(offer webrtc.SessionDescription, services map[string]string, id *Identity) (*webrtc.SessionDescription, error) {
 	pc, err := webrtc.NewPeerConnection(webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
 			{URLs: []string{"stun:stun.l.google.com:19302"}},
@@ -132,7 +140,6 @@ func handleOffer(offer webrtc.SessionDescription, services map[string]string) (*
 	}
 
 	pc.OnDataChannel(func(dc *webrtc.DataChannel) {
-		// Buffer all incoming messages (first = service name, rest = TCP data).
 		buf := make(chan []byte, 256)
 		dc.OnMessage(func(msg webrtc.DataChannelMessage) {
 			data := make([]byte, len(msg.Data))
@@ -146,27 +153,93 @@ func handleOffer(offer webrtc.SessionDescription, services map[string]string) (*
 		dc.OnError(func(e error) { fmt.Printf("[dc] error: %v\n", e) })
 
 		dc.OnOpen(func() {
-			firstMsg, ok := <-buf
-			if !ok {
-				return
+			// Pre-connect command loop.
+			// Commands: ping, list, challenge <hex>, verify <hex>, <service-name>
+			var commitment []byte // sha256(r_client), set on "challenge"
+			var rNode []byte      // our random, set on "challenge"
+
+			for {
+				raw, ok := <-buf
+				if !ok {
+					return
+				}
+				text := strings.TrimRight(string(raw), "\r\n")
+
+				switch {
+				case text == "ping":
+					dc.SendText("pong")
+
+				case text == "list":
+					names := make([]string, 0, len(services))
+					for k := range services {
+						names = append(names, k)
+					}
+					sort.Strings(names)
+					listJSON, _ := json.Marshal(names)
+					dc.Send(listJSON)
+
+				case strings.HasPrefix(text, "challenge "):
+					commitHex := strings.TrimPrefix(text, "challenge ")
+					c, err := hex.DecodeString(commitHex)
+					if err != nil || len(c) != 32 {
+						dc.SendText("err: invalid commitment")
+						continue
+					}
+					commitment = c
+					rNode = make([]byte, 32)
+					if _, err := rand.Read(rNode); err != nil {
+						dc.SendText("err: internal error")
+						return
+					}
+					dc.SendText("challenge-response " + hex.EncodeToString(rNode))
+
+				case strings.HasPrefix(text, "verify "):
+					if commitment == nil || rNode == nil {
+						dc.SendText("err: no challenge in progress")
+						continue
+					}
+					rClientHex := strings.TrimPrefix(text, "verify ")
+					rClient, err := hex.DecodeString(rClientHex)
+					if err != nil || len(rClient) != 32 {
+						dc.SendText("err: invalid opening")
+						continue
+					}
+					check := sha256.Sum256(rClient)
+					if !bytes.Equal(check[:], commitment) {
+						dc.SendText("err: commitment mismatch")
+						commitment = nil
+						rNode = nil
+						continue
+					}
+					joint := xorBytes(rClient, rNode)
+					msg := append([]byte(dcChallengePrefix), joint...)
+					sig := id.Sign(msg)
+					dc.SendText("proof " + hex.EncodeToString([]byte(id.PubKey)) + " " + hex.EncodeToString(sig))
+					commitment = nil
+					rNode = nil
+
+				default:
+					// Treat as service name.
+					svcName := text
+					target, exists := services[svcName]
+					if !exists {
+						dc.SendText(fmt.Sprintf("err: unknown service %q", svcName))
+						dc.Close()
+						return
+					}
+					conn, err := net.Dial("tcp", target)
+					if err != nil {
+						fmt.Printf("[dc] TCP dial failed for service %q: %v\n", svcName, err)
+						dc.SendText(fmt.Sprintf("err: dial failed: %v", err))
+						dc.Close()
+						return
+					}
+					dc.SendText("ok")
+					fmt.Printf("[dc] service %q → %s\n", svcName, target)
+					bridge(dc, conn, buf)
+					return
+				}
 			}
-			svcName := string(firstMsg)
-			target, exists := services[svcName]
-			if !exists {
-				dc.SendText(fmt.Sprintf("err: unknown service %q", svcName))
-				dc.Close()
-				return
-			}
-			conn, err := net.Dial("tcp", target)
-			if err != nil {
-				fmt.Printf("[dc] TCP dial failed for service %q: %v\n", svcName, err)
-				dc.SendText(fmt.Sprintf("err: dial failed: %v", err))
-				dc.Close()
-				return
-			}
-			dc.SendText("ok")
-			fmt.Printf("[dc] service %q → %s\n", svcName, target)
-			bridge(dc, conn, buf)
 		})
 	})
 
@@ -184,6 +257,14 @@ func handleOffer(offer webrtc.SessionDescription, services map[string]string) (*
 	<-gatherDone
 	local := pc.LocalDescription()
 	return local, nil
+}
+
+func xorBytes(a, b []byte) []byte {
+	out := make([]byte, len(a))
+	for i := range a {
+		out[i] = a[i] ^ b[i]
+	}
+	return out
 }
 
 func bridge(dc *webrtc.DataChannel, conn net.Conn, buf chan []byte) {
