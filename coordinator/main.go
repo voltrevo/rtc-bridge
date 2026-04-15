@@ -129,10 +129,9 @@ type pendingOffer struct {
 }
 
 type node struct {
-	id        string
-	services  []string
-	publicKey []byte
-	conn      *websocket.Conn
+	id       string
+	services []string
+	conn     *websocket.Conn
 	lastSeen  time.Time
 	pending   map[string]*pendingOffer // requestId → waiter
 	mu        sync.Mutex
@@ -210,10 +209,9 @@ func (c *coordinator) handleNodeWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	n := &node{
-		id:        reg.NodeID,
-		services:  reg.Services,
-		publicKey: reg.PublicKey,
-		conn:      conn,
+		id:       reg.NodeID,
+		services: reg.Services,
+		conn:     conn,
 		lastSeen:  time.Now(),
 		pending:   make(map[string]*pendingOffer),
 	}
@@ -303,24 +301,22 @@ func (c *coordinator) pruneLoop() {
 
 // ── HTTP handlers ─────────────────────────────────────────────────────────────
 
-// GET /nodes → [{nodeId, publicKey (hex), services}, ...]
+// GET /nodes → [{nodeId, services}, ...]
 func (c *coordinator) handleNodes(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "GET only", http.StatusMethodNotAllowed)
 		return
 	}
 	type nodeInfo struct {
-		NodeID    string   `json:"nodeId"`
-		PublicKey string   `json:"publicKey"` // hex
-		Services  []string `json:"services"`
+		NodeID   string   `json:"nodeId"`
+		Services []string `json:"services"`
 	}
 	var list []nodeInfo
 	c.mu.RLock()
 	for _, n := range c.nodes {
 		list = append(list, nodeInfo{
-			NodeID:    n.id,
-			PublicKey: fmt.Sprintf("%x", n.publicKey),
-			Services:  n.services,
+			NodeID:   n.id,
+			Services: n.services,
 		})
 	}
 	c.mu.RUnlock()
