@@ -394,7 +394,7 @@
       if (!text) return;
       inp.value = '';
       termLine('sent', text);
-      channel.dc.send(text);
+      channel.dc.send(text + '\n');
     };
 
     // ── Helpers ────────────────────────────────────────────────────────────
