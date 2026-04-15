@@ -3,7 +3,8 @@
 //
 // Usage:
 //
-//	cli-client [--signal http://127.0.0.1:8765] [--messages "hello,world"]
+//	cli-client [--signal http://127.0.0.1:8765] --service NAME [--messages "hello,world"]
+//	cli-client --coordinator http://coord:8765  --service NAME [--node nodeId] [--messages "hello,world"]
 package main
 
 import (
@@ -22,6 +23,8 @@ import (
 
 func main() {
 	signalURL := flag.String("signal", "http://127.0.0.1:8765", "webrtc-forward HTTP signaling URL (base)")
+	coordURL := flag.String("coordinator", "", "coordinator base URL (uses /services + /offer instead of --signal)")
+	nodeID := flag.String("node", "", "nodeId to connect to (optional when using --coordinator; auto-picks first if blank)")
 	service := flag.String("service", "", "service name to request (required)")
 	messages := flag.String("messages", "hello,ping,goodbye", "comma-separated messages to send")
 	flag.Parse()
@@ -69,23 +72,25 @@ func main() {
 	<-gatherDone
 
 	offerJSON, _ := json.Marshal(pc.LocalDescription())
-	fmt.Printf("[client] sending offer to %s/offer\n", *signalURL)
-
-	// POST offer to webrtc-forward's HTTP signaling endpoint.
-	resp, err := http.Post(*signalURL+"/offer", "application/json", bytes.NewReader(offerJSON))
-	if err != nil {
-		fatal("posting offer", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		fmt.Fprintf(os.Stderr, "signal server returned %d: %s\n", resp.StatusCode, body)
-		os.Exit(1)
-	}
 
 	var answer webrtc.SessionDescription
-	if err := json.NewDecoder(resp.Body).Decode(&answer); err != nil {
-		fatal("decoding answer", err)
+	if *coordURL != "" {
+		answer = postViaCoordinator(*coordURL, *service, *nodeID, offerJSON)
+	} else {
+		fmt.Printf("[client] sending offer to %s/offer\n", *signalURL)
+		resp, err := http.Post(*signalURL+"/offer", "application/json", bytes.NewReader(offerJSON))
+		if err != nil {
+			fatal("posting offer", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			fmt.Fprintf(os.Stderr, "signal server returned %d: %s\n", resp.StatusCode, body)
+			os.Exit(1)
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&answer); err != nil {
+			fatal("decoding answer", err)
+		}
 	}
 	if err := pc.SetRemoteDescription(answer); err != nil {
 		fatal("set remote description", err)
@@ -151,6 +156,58 @@ func main() {
 		fmt.Fprintln(os.Stderr, "\nFAIL")
 		os.Exit(1)
 	}
+}
+
+// postViaCoordinator resolves a nodeId (or picks one) and posts offer via coordinator.
+func postViaCoordinator(coordBase, service, nodeID string, offerJSON []byte) webrtc.SessionDescription {
+	if nodeID == "" {
+		// GET /services → pick first node offering this service.
+		resp, err := http.Get(coordBase + "/services")
+		if err != nil {
+			fatal("GET /services", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			fmt.Fprintf(os.Stderr, "coordinator /services returned %d: %s\n", resp.StatusCode, body)
+			os.Exit(1)
+		}
+		var svcMap map[string][]string
+		if err := json.NewDecoder(resp.Body).Decode(&svcMap); err != nil {
+			fatal("decoding /services", err)
+		}
+		nodes, ok := svcMap[service]
+		if !ok || len(nodes) == 0 {
+			fmt.Fprintf(os.Stderr, "error: no nodes offering service %q\n", service)
+			os.Exit(1)
+		}
+		nodeID = nodes[0]
+		fmt.Printf("[client] auto-selected node %s for service %q\n", nodeID, service)
+	}
+
+	type offerReq struct {
+		Service string          `json:"service"`
+		NodeID  string          `json:"nodeId"`
+		Offer   json.RawMessage `json:"offer"`
+	}
+	body, _ := json.Marshal(offerReq{Service: service, NodeID: nodeID, Offer: json.RawMessage(offerJSON)})
+	fmt.Printf("[client] posting offer via coordinator %s/offer (node %s)\n", coordBase, nodeID)
+
+	resp, err := http.Post(coordBase+"/offer", "application/json", bytes.NewReader(body))
+	if err != nil {
+		fatal("posting offer to coordinator", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		fmt.Fprintf(os.Stderr, "coordinator /offer returned %d: %s\n", resp.StatusCode, b)
+		os.Exit(1)
+	}
+	var answer webrtc.SessionDescription
+	if err := json.NewDecoder(resp.Body).Decode(&answer); err != nil {
+		fatal("decoding coordinator answer", err)
+	}
+	return answer
 }
 
 func fatal(msg string, err error) {

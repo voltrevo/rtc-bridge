@@ -8,6 +8,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/json"
@@ -17,8 +18,11 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"sort"
 	"strings"
+	"sync"
+	"syscall"
 
 	"github.com/pion/webrtc/v3"
 )
@@ -64,12 +68,22 @@ func cmdRun(args []string) {
 		fmt.Fprintln(os.Stderr, "warning: no services configured — all connections will be rejected")
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+	go func() { <-sig; cancel() }()
+
 	// Start coordinator connections if configured.
+	var wg sync.WaitGroup
 	if len(cfg.Coordinators) > 0 {
 		id := IdentityFromPrivKey(cfg.PrivKey)
 		fmt.Printf("node id: %s\n", id.NodeID)
 		for _, coordURL := range cfg.Coordinators {
-			go runCoordinator(coordURL, id, cfg.Services)
+			wg.Add(1)
+			go func(u string) {
+				defer wg.Done()
+				runCoordinator(ctx, u, id, cfg.Services)
+			}(coordURL)
 		}
 	}
 
@@ -79,6 +93,9 @@ func cmdRun(args []string) {
 	default:
 		runStdin(cfg.Services)
 	}
+
+	cancel()
+	wg.Wait()
 }
 
 func cmdInit(args []string) {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/json"
@@ -19,22 +20,29 @@ const (
 )
 
 // runCoordinator connects to a coordinator and handles offers indefinitely,
-// reconnecting on disconnect.
-func runCoordinator(url string, id *Identity, services map[string]string) {
+// reconnecting on disconnect until ctx is cancelled.
+func runCoordinator(ctx context.Context, url string, id *Identity, services map[string]string) {
 	svcNames := make([]string, 0, len(services))
 	for k := range services {
 		svcNames = append(svcNames, k)
 	}
 	for {
-		err := connectCoordinator(url, id, svcNames, services)
+		err := connectCoordinator(ctx, url, id, svcNames, services)
+		if ctx.Err() != nil {
+			return // context cancelled — clean exit
+		}
 		fmt.Printf("[coord:%s] disconnected: %v — reconnecting in %s\n",
 			url, err, coordReconnectWait)
-		time.Sleep(coordReconnectWait)
+		select {
+		case <-time.After(coordReconnectWait):
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 
-func connectCoordinator(url string, id *Identity, svcNames []string, services map[string]string) error {
-	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+func connectCoordinator(ctx context.Context, url string, id *Identity, svcNames []string, services map[string]string) error {
+	conn, _, err := websocket.DefaultDialer.DialContext(ctx, url, nil)
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)
 	}
@@ -80,9 +88,9 @@ func connectCoordinator(url string, id *Identity, svcNames []string, services ma
 	}
 	fmt.Printf("[coord:%s] registered as %s\n", url, id.NodeID)
 
-	// Ping loop.
-	done := make(chan struct{})
-	defer close(done)
+	// Close conn when context is cancelled (triggers read loop to exit).
+	stopPing := make(chan struct{})
+	defer close(stopPing)
 	go func() {
 		ticker := time.NewTicker(coordPingInterval)
 		defer ticker.Stop()
@@ -90,7 +98,14 @@ func connectCoordinator(url string, id *Identity, svcNames []string, services ma
 			select {
 			case <-ticker.C:
 				conn.WriteMessage(websocket.PingMessage, nil)
-			case <-done:
+			case <-stopPing:
+				return
+			case <-ctx.Done():
+				// Send graceful close before closing the connection.
+				msg := protocol.CloseMsg{Type: protocol.MsgClose}
+				raw, _ := json.Marshal(msg)
+				conn.WriteMessage(websocket.TextMessage, raw)
+				conn.Close()
 				return
 			}
 		}
@@ -139,12 +154,5 @@ func handleCoordOffer(conn *websocket.Conn, msg protocol.OfferMsg, services map[
 		Answer:    json.RawMessage(answerJSON),
 	}
 	raw, _ := json.Marshal(ans)
-	conn.WriteMessage(websocket.TextMessage, raw)
-}
-
-// SendClose sends a graceful close message to the coordinator.
-func sendClose(conn *websocket.Conn) {
-	msg := protocol.CloseMsg{Type: protocol.MsgClose}
-	raw, _ := json.Marshal(msg)
 	conn.WriteMessage(websocket.TextMessage, raw)
 }
