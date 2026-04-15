@@ -268,38 +268,44 @@ func xorBytes(a, b []byte) []byte {
 }
 
 func bridge(dc *webrtc.DataChannel, conn net.Conn, buf chan []byte) {
-	// Drain messages buffered before TCP connection was ready, then forward
-	// ongoing messages from the same channel.
+	var once sync.Once
+	cleanup := func() {
+		once.Do(func() {
+			conn.Close()
+			dc.Close() // triggers OnClose → close(buf)
+		})
+	}
+
+	// DC→TCP: drain buf (pre-bridge messages + ongoing) into TCP conn.
 	go func() {
+		defer cleanup()
 		for data := range buf {
 			if _, err := conn.Write(data); err != nil {
 				fmt.Printf("[bridge] TCP write: %v\n", err)
-				conn.Close()
 				return
 			}
 		}
-		conn.Close()
 	}()
 
-	// Forward TCP→DataChannel.
+	// TCP→DC: forward TCP reads to data channel.
 	go func() {
+		defer cleanup()
 		rbuf := make([]byte, 65536)
 		for {
 			n, err := conn.Read(rbuf)
 			if n > 0 {
 				if sendErr := dc.Send(rbuf[:n]); sendErr != nil {
 					fmt.Printf("[bridge] dc send: %v\n", sendErr)
-					break
+					return
 				}
 			}
 			if err != nil {
 				if err != io.EOF {
 					fmt.Printf("[bridge] TCP read: %v\n", err)
 				}
-				break
+				return
 			}
 		}
-		dc.Close()
 	}()
 }
 
