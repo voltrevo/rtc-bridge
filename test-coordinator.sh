@@ -4,7 +4,7 @@ set -euo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 ECHO="$DIR/echo/echo"
-FORWARD="$DIR/node/rtc-mesh"
+FORWARD="$DIR/node/rtc-bridge"
 CLIENT="$DIR/cli-client/cli-client"
 COORD="$DIR/coordinator/coordinator"
 
