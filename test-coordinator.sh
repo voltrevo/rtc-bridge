@@ -4,7 +4,7 @@ set -euo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 ECHO="$DIR/echo/echo"
-FORWARD="$DIR/webrtc-forward"
+FORWARD="$DIR/node/webrtc-forward"
 CLIENT="$DIR/cli-client/cli-client"
 COORD="$DIR/coordinator/coordinator"
 
@@ -46,7 +46,7 @@ wait_service() {
 
 echo "==> Building binaries"
 export PATH=$PATH:/usr/local/go/bin
-(cd "$DIR" && go build -o "$FORWARD" . && go build -o "$CLIENT" ./cli-client && go build -o "$ECHO" ./echo && go build -o "$COORD" ./coordinator)
+(cd "$DIR" && go build -o "$FORWARD" ./node && go build -o "$CLIENT" ./cli-client && go build -o "$ECHO" ./echo && go build -o "$COORD" ./coordinator)
 
 echo "==> Writing echo config"
 cat > "$TMPDIR/echo.json5" <<EOF

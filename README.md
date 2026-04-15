@@ -23,7 +23,7 @@ exchange SDP, then establishes a direct WebRTC connection.
 
 ```bash
 # 1. Build
-go build -o webrtc-forward .
+go build -o node/webrtc-forward ./node
 go build -o coordinator/coordinator ./coordinator
 go build -o echo/echo ./echo
 
@@ -31,9 +31,9 @@ go build -o echo/echo ./echo
 cd coordinator && ./coordinator init && ./coordinator run
 
 # 3. Configure and start a node
-cd .. && ./webrtc-forward init   # generates config.json5 with a fresh keypair
+./node/webrtc-forward init   # generates config.json5 with a fresh keypair
 # Edit config.json5: add your service(s) and set the coordinator URL
-./webrtc-forward run
+./node/webrtc-forward run
 
 # 4. Open demo.html in a browser
 #    Enter the coordinator URL → fetch services → click a node → chat
@@ -86,7 +86,7 @@ cd .. && ./webrtc-forward init   # generates config.json5 with a fresh keypair
 ## Building
 
 ```bash
-go build -o webrtc-forward .
+go build -o node/webrtc-forward ./node
 go build -o coordinator/coordinator ./coordinator
 go build -o echo/echo ./echo
 ```
