@@ -30,6 +30,7 @@
     "p2p",
     "data-channel"
   ],
+  "homepage": "https://rtc-bridge.voltrevo.com",
   "repository": {
     "type": "git",
     "url": "https://github.com/voltrevo/rtc-bridge"
