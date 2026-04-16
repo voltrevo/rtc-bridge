@@ -1,6 +1,6 @@
 # rtc-bridge
 
-Browser client for [rtc-bridge](https://github.com/voltrevo/rtc-bridge) — connect to nodes over WebRTC without requiring public IPs or open ports on the node.
+Browser client for [rtc-bridge](https://github.com/voltrevo/rtc-bridge) — access TCP services directly from the browser over WebRTC, no public IP or open ports required.
 
 Nodes dial out to a coordinator server. The browser discovers nodes via the coordinator's HTTP API, exchanges SDP through it, then communicates directly over a WebRTC data channel.
 
