@@ -115,7 +115,8 @@ const landingHTML = `<!DOCTYPE html>
     .wordmark {
       font-size: 3rem;
       font-weight: 800;
-      letter-spacing: -0.06em;
+      letter-spacing: -0.02em;
+      padding-right: 0.02em;
       background: linear-gradient(135deg, #58a6ff 0%, #a371f7 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
