@@ -17,6 +17,7 @@
       align-items: flex-start;
       padding: 2rem;
       gap: 1.5rem;
+      max-width: 560px;
     }
 
     h1 {
@@ -86,11 +87,10 @@
       background: #161b22;
       border: 1px solid #30363d;
       border-radius: 10px;
-      padding: 1rem;
+      padding: 0.85rem 1rem;
       display: flex;
       flex-direction: column;
-      gap: 0.5rem;
-      min-width: 220px;
+      gap: 0.4rem;
     }
     .node-id {
       font-family: 'SF Mono', 'Fira Code', Consolas, monospace;
@@ -115,7 +115,7 @@
       display: flex;
       flex-direction: column;
       gap: 0.75rem;
-      min-width: 340px;
+      width: 100%;
     }
 
     .repl-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
@@ -124,26 +124,35 @@
       font-size: 0.83rem;
       font-family: 'SF Mono', 'Fira Code', Consolas, monospace;
       color: #8b949e;
-      min-height: 1.2em;
     }
+    .result:empty { display: none; }
     .result.ok  { color: #3fb950; }
     .result.err { color: #f85149; }
 
     .service-panel {
-      border-top: 1px solid #30363d;
-      padding-top: 0.75rem;
-      margin-top: 0.25rem;
+      background: #0d1117;
+      border-radius: 8px;
+      padding: 0.65rem 0.75rem;
       display: flex;
       flex-direction: column;
       gap: 0;
     }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.4rem;
+    }
+    .panel-header .section-label { margin-bottom: 0; }
+
     .term-log {
       font-family: 'SF Mono', 'Fira Code', Consolas, monospace;
       font-size: 0.82rem;
-      min-height: 120px;
-      max-height: 300px;
+      min-height: 0;
+      max-height: 200px;
       overflow-y: auto;
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.4rem;
       display: flex;
       flex-direction: column;
       gap: 0.15rem;
@@ -400,7 +409,16 @@
     }
 
     function addTerminal(ch, svc, label, panel, onClose) {
+      // Replace placeholder label with header row (label + close button)
+      const header = document.createElement('div');
+      header.className = 'panel-header';
       label.textContent = svc;
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'danger';
+      closeBtn.textContent = '×';
+      closeBtn.onclick = onClose;
+      header.append(label, closeBtn);
+      panel.appendChild(header);
 
       const log = document.createElement('div');
       log.className = 'term-log';
@@ -426,12 +444,6 @@
       sendBtn.onclick = doSend;
       input.addEventListener('keydown', e => { if (e.key === 'Enter') doSend(); });
       inputRow.appendChild(sendBtn);
-
-      const closeBtn = document.createElement('button');
-      closeBtn.className = 'danger';
-      closeBtn.textContent = '×';
-      closeBtn.onclick = onClose;
-      inputRow.appendChild(closeBtn);
 
       panel.appendChild(inputRow);
 
