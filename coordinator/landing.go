@@ -100,7 +100,7 @@ const landingHTML = `<!DOCTYPE html>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      background: #0d1117;
+      background: radial-gradient(ellipse at 50% 0%, #111827 0%, #0d1117 65%);
       color: #e6edf3;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
       min-height: 100vh;
