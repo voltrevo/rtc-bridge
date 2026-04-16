@@ -210,9 +210,28 @@ export class NodeChannel {
     if (resp !== 'ok') throw new Error(`bridge failed: ${resp}`);
   }
 
+  /**
+   * Open a new data channel on the same peer connection (no re-signaling needed).
+   * Use this to add service bridges to an existing node connection.
+   */
+  async openSibling(service: string): Promise<NodeChannel> {
+    const dc = this.pc.createDataChannel(service);
+    dc.binaryType = 'arraybuffer';
+    await new Promise<void>((resolve, reject) => {
+      if (dc.readyState === 'open') { resolve(); return; }
+      dc.addEventListener('open', () => resolve(), { once: true });
+      this.pc.addEventListener('connectionstatechange', () => {
+        if (this.pc.connectionState === 'failed' || this.pc.connectionState === 'closed') {
+          reject(new Error(`peer connection ${this.pc.connectionState}`));
+        }
+      });
+    });
+    return new NodeChannel(dc, this.pc, this._nodeId, service);
+  }
+
+  /** Close this data channel only. Use pc.close() to tear down the whole connection. */
   close(): void {
     this.dc.close();
-    this.pc.close();
   }
 }
 

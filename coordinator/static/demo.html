@@ -242,7 +242,7 @@
     }
 
     // ── Panel creation ─────────────────────────────────────────────────────
-    // Card click → new REPL panel each time, no global state.
+    // Card click → new REPL panel. Service panels are nested children.
     async function openNodePanel(nodeId, service) {
       const panel = document.createElement('div');
       panel.className = 'repl';
@@ -287,6 +287,10 @@
       svcChips.className = 'row';
       svcChips.style.cssText = 'gap:0.3rem;flex-wrap:wrap';
 
+      // Container for nested service panels
+      const svcPanels = document.createElement('div');
+      svcPanels.style.cssText = 'display:flex;flex-direction:column;gap:0.75rem;margin-top:0.25rem';
+
       const actions = document.createElement('div');
       actions.className = 'repl-actions';
 
@@ -313,7 +317,8 @@
             const chip = document.createElement('span');
             chip.className = 'chip';
             chip.innerHTML = `<span class="svc-dot"></span>${svc}`;
-            chip.onclick = () => openBridgePanel(nodeId, svc);
+            // Use openSibling — new DC on same PC, no re-signaling
+            chip.onclick = () => openServicePanel(ch, svcPanels, svc);
             svcChips.appendChild(chip);
           }
         } catch(e) { setResult(String(e), 'err'); }
@@ -325,13 +330,18 @@
           setResult(r.ok ? `✓ verified  ${r.pubkey.slice(0,16)}…` : `✗ ${r.message}`, r.ok ? 'ok' : 'err');
         } catch(e) { setResult(String(e), 'err'); }
       });
-      mkBtn('Disconnect', 'danger', () => { ch.close(); panel.remove(); });
+      // Disconnect closes the PC → all DCs (REPL + services) die
+      mkBtn('Disconnect', 'danger', () => { ch.pc.close(); panel.remove(); });
 
-      panel.append(actions, result, svcChips);
-      ch.dc.addEventListener('close', () => panel.remove());
+      panel.append(actions, result, svcChips, svcPanels);
+      ch.pc.addEventListener('connectionstatechange', () => {
+        if (ch.pc.connectionState === 'closed' || ch.pc.connectionState === 'failed') {
+          panel.remove();
+        }
+      });
     }
 
-    // Chip click → new bridge panel each time, no global state.
+    // Chip click from node list → new independent connection + bridge.
     async function openBridgePanel(nodeId, svc) {
       const panel = document.createElement('div');
       panel.className = 'repl service-panel';
@@ -357,7 +367,39 @@
         panel.appendChild(btn);
         return;
       }
+      addTerminal(ch, svc, label, panel, () => { ch.pc.close(); panel.remove(); });
+    }
 
+    // Service chip from REPL list → sibling DC on same PC, nested inside node panel.
+    async function openServicePanel(replCh, container, svc) {
+      const panel = document.createElement('div');
+      panel.className = 'service-panel';
+      const label = document.createElement('div');
+      label.className = 'section-label';
+      label.style.marginBottom = '0.3rem';
+      label.textContent = `Connecting to ${svc}…`;
+      panel.appendChild(label);
+      container.appendChild(panel);
+
+      let ch;
+      try {
+        ch = await replCh.openSibling(svc);
+        await ch.bridge(svc);
+      } catch(e) {
+        label.textContent = String(e);
+        label.style.color = '#f85149';
+        const btn = document.createElement('button');
+        btn.className = 'danger';
+        btn.style.marginTop = '0.5rem';
+        btn.textContent = '×';
+        btn.onclick = () => panel.remove();
+        panel.appendChild(btn);
+        return;
+      }
+      addTerminal(ch, svc, label, panel, () => { ch.close(); panel.remove(); });
+    }
+
+    function addTerminal(ch, svc, label, panel, onClose) {
       label.textContent = svc;
 
       const log = document.createElement('div');
@@ -388,7 +430,7 @@
       const closeBtn = document.createElement('button');
       closeBtn.className = 'danger';
       closeBtn.textContent = '×';
-      closeBtn.onclick = () => { ch.close(); panel.remove(); };
+      closeBtn.onclick = onClose;
       inputRow.appendChild(closeBtn);
 
       panel.appendChild(inputRow);
