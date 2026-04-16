@@ -8,5 +8,6 @@
 
 # client build output
 /client/node_modules/
+/client/dist/
 /coordinator/static/rtc-bridge.js
 /coordinator/static/rtc-bridge.js.map

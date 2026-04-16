@@ -1,12 +1,40 @@
 {
   "name": "rtc-bridge",
-  "private": true,
+  "version": "0.1.0",
+  "description": "Browser client for rtc-bridge — connect to nodes via WebRTC without public IPs or open ports",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "sideEffects": false,
   "scripts": {
     "build": "esbuild src/index.ts --bundle --format=esm --sourcemap --outfile=../coordinator/static/rtc-bridge.js",
+    "build:dist": "esbuild src/index.ts --bundle --format=esm --outfile=dist/index.js && tsc --project tsconfig.build.json",
+    "prepublishOnly": "npm run build:dist",
     "dev": "esbuild src/index.ts --bundle --format=esm --sourcemap --outfile=../coordinator/static/rtc-bridge.js --watch",
     "typecheck": "tsc --noEmit",
     "typecheck:watch": "tsc --noEmit --watch"
   },
+  "keywords": [
+    "webrtc",
+    "rtc-bridge",
+    "tcp",
+    "browser",
+    "p2p",
+    "data-channel"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/voltrevo/rtc-bridge"
+  },
+  "license": "MIT",
   "devDependencies": {
     "esbuild": "^0.25.0",
     "typescript": "^5.8.0"
