@@ -15,9 +15,23 @@ import (
 )
 
 const (
-	coordPingInterval  = 60 * time.Second
-	coordReconnectWait = 5 * time.Second
+	coordPingInterval = 60 * time.Second
+
+	// Backoff parameters (discrete logistic):
+	//   delay[n+1] = delay[n] * (1 + k*(1 - delay[n]/maxDelay))
+	// Starts at ~1s, multiplier tapers from ~1.5x down to ~1x near the cap.
+	backoffInitial = 1.0  // seconds
+	backoffK       = 0.5  // growth rate constant
+	backoffMax     = 60.0 // seconds (asymptotic cap)
+
+	// If a connection stays up this long, reset the backoff on next disconnect.
+	backoffResetAfter = 30 * time.Second
 )
+
+// nextBackoff returns the next backoff delay given the current one.
+func nextBackoff(cur float64) float64 {
+	return cur * (1 + backoffK*(1-cur/backoffMax))
+}
 
 // runCoordinator connects to a coordinator and handles offers indefinitely,
 // reconnecting on disconnect until ctx is cancelled.
@@ -26,15 +40,21 @@ func runCoordinator(ctx context.Context, url string, id *Identity, services map[
 	for k := range services {
 		svcNames = append(svcNames, k)
 	}
+	delay := backoffInitial
 	for {
+		start := time.Now()
 		err := connectCoordinator(ctx, url, id, svcNames, services)
 		if ctx.Err() != nil {
 			return // context cancelled — clean exit
 		}
-		fmt.Printf("[coord:%s] disconnected: %v — reconnecting in %s\n",
-			url, err, coordReconnectWait)
+		if time.Since(start) >= backoffResetAfter {
+			delay = backoffInitial
+		}
+		wait := time.Duration(delay * float64(time.Second))
+		fmt.Printf("[coord:%s] disconnected: %v — reconnecting in %.1fs\n", url, err, delay)
+		delay = nextBackoff(delay)
 		select {
-		case <-time.After(coordReconnectWait):
+		case <-time.After(wait):
 		case <-ctx.Done():
 			return
 		}
