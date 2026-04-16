@@ -1,7 +1,6 @@
 # rtc-bridge
 
-Bridge browser WebRTC data channels to local TCP services, with service
-discovery and signaling handled by a coordinator server.
+Access TCP services directly from the browser over WebRTC — no public IP or open ports required on the node.
 
 ```
                     ┌─ signaling ──► coordinator ◄──WS── rtc-bridge node ──TCP──► service
