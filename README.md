@@ -72,7 +72,7 @@ cd coordinator && ./coordinator init && ./coordinator run
 |---|---|---|
 | `/services` | GET | Returns `{"svcName": ["nodeId", …], …}` |
 | `/nodes` | GET | Returns `[{nodeId, publicKey (hex), services}, …]` |
-| `/offer` | POST | `{service, nodeId, offer}` → SDP answer |
+| `/offer` | POST | `{nodeId, offer}` → SDP answer |
 | `/ws` | WS | Node registration endpoint |
 
 ## Protocol
@@ -88,7 +88,7 @@ cd coordinator && ./coordinator init && ./coordinator run
    - `list` → JSON array of service names
    - `challenge <commitment>` / `verify <r_client>` → `proof <pubkey> <sig>`
      (node proves ed25519 identity; client can verify the nodeId matches)
-   - `<service-name>` → `ok`, then the channel is bridged to TCP
+   - `connect <service>` → `ok`, then the channel is bridged to TCP
 
 ## Building
 

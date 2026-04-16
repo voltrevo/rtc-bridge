@@ -20,31 +20,35 @@ const coordinator = new Coordinator('https://your-coordinator.example.com');
 // List available nodes
 const nodes = await coordinator.nodes();
 
-// Dial a node
+// Dial a node — establishes the WebRTC peer connection
 const node = await dial(coordinator, nodes[0].nodeId);
 
+// Each call opens a new data channel in command mode
+const ch = await node.createChannel();
+
 // Ping
-const ms = await node.ping();
+const ms = await ch.ping();
 
 // List services exposed by the node
-const services = await node.list();
+const services = await ch.list();
 
 // Verify the node's ed25519 identity
-const result = await node.verifyIdentity();
+const result = await ch.verifyIdentity();
 if (result.ok) console.log('verified:', result.pubkey);
 
-// Connect to a named TCP service — returns the raw data channel
-const dc = await node.connect('myservice');
-dc.addEventListener('message', (e) => console.log(e.data));
-dc.send('hello\n');
+// Connect to a named TCP service — channel transitions to pipe mode
+await ch.connect('myservice');
+ch.dc.addEventListener('message', (e) => console.log(e.data));
+ch.dc.send('hello\n');
 
 // Open another service on the same peer connection (no re-signaling)
-const dc2 = await node.connect('otherservice');
+const ch2 = await node.createChannel();
+await ch2.connect('otherservice');
 
-// Close an individual service channel
-dc.close();
+// Close an individual channel
+ch.close();
 
-// Close the node connection (drops all data channels)
+// Close the node connection (drops all channels)
 node.close();
 ```
 
@@ -75,12 +79,23 @@ Negotiates a WebRTC connection via the coordinator. Attempts a fast path with a 
 ```ts
 node.pc   // RTCPeerConnection
 
-node.ping(): Promise<number>              // round-trip ms
-node.list(): Promise<string[]>           // service names
-node.verifyIdentity(): Promise<VerifyResult>
-node.connect(service: string): Promise<RTCDataChannel>  // open service, returns DC
-node.close(): void                        // close the peer connection
+node.createChannel(): Promise<Channel>  // open a new data channel in command mode
+node.close(): void                      // close the peer connection
 ```
+
+### `Channel`
+
+```ts
+ch.dc   // RTCDataChannel (use directly once in pipe mode)
+
+ch.ping(): Promise<number>              // round-trip ms
+ch.list(): Promise<string[]>           // service names
+ch.verifyIdentity(): Promise<VerifyResult>
+ch.connect(service: string): Promise<void>  // transition to pipe mode; command methods throw after this
+ch.close(): void                            // close this data channel
+```
+
+Calling `ping`, `list`, `verifyIdentity`, or `connect` after `connect()` has been called throws an error — the channel is in pipe mode and `ch.dc` should be used directly for reads and writes.
 
 ## Data channel protocol
 
