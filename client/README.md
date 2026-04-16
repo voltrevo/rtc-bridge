@@ -13,39 +13,39 @@ npm install rtc-bridge
 ## Usage
 
 ```ts
-import { Coordinator, connect } from 'rtc-bridge';
+import { Coordinator, dial } from 'rtc-bridge';
 
 const coordinator = new Coordinator('https://your-coordinator.example.com');
 
 // List available nodes
 const nodes = await coordinator.nodes();
 
-// Connect to a node (command mode)
-const ch = await connect(coordinator, nodes[0].nodeId);
+// Dial a node
+const node = await dial(coordinator, nodes[0].nodeId);
 
 // Ping
-const ms = await ch.ping();
+const ms = await node.ping();
 
 // List services exposed by the node
-const services = await ch.list();
+const services = await node.list();
 
 // Verify the node's ed25519 identity
-const result = await ch.verifyIdentity();
+const result = await node.verifyIdentity();
 if (result.ok) console.log('verified:', result.pubkey);
 
-// Bridge to a named TCP service — returns the raw data channel
-const dc = await ch.bridge('myservice');
-// dc is now piped to the TCP connection
+// Connect to a named TCP service — returns the raw data channel
+const dc = await node.connect('myservice');
+dc.addEventListener('message', (e) => console.log(e.data));
+dc.send('hello\n');
 
-// Open an additional service on the same peer connection (no re-signaling)
-const sib = await ch.openSibling('otherservice');
-await sib.bridge('otherservice');
+// Open another service on the same peer connection (no re-signaling)
+const dc2 = await node.connect('otherservice');
 
-// Close just this data channel (leaves the peer connection open)
-ch.close();
+// Close an individual service channel
+dc.close();
 
-// Close the whole peer connection (drops all data channels)
-ch.pc.close();
+// Close the node connection (drops all data channels)
+node.close();
 ```
 
 ## API
@@ -58,35 +58,33 @@ coordinator.nodes(): Promise<NodeInfo[]>
 coordinator.services(): Promise<Record<string, string[]>>
 ```
 
-### `connect`
+### `dial`
 
 ```ts
-connect(
+dial(
   coordinator: Coordinator,
   nodeId: string,
   config?: RTCConfiguration,
-): Promise<NodeChannel>
+): Promise<Node>
 ```
 
 Negotiates a WebRTC connection via the coordinator. Attempts a fast path with a 1 s ICE gathering timeout, then retries with full gathering if the connection fails.
 
-### `NodeChannel`
+### `Node`
 
 ```ts
-ch.dc   // RTCDataChannel
-ch.pc   // RTCPeerConnection
+node.pc   // RTCPeerConnection
 
-ch.ping(): Promise<number>              // round-trip ms
-ch.list(): Promise<string[]>           // service names
-ch.verifyIdentity(): Promise<VerifyResult>
-ch.bridge(service: string): Promise<RTCDataChannel>  // switch to TCP bridge mode, returns DC
-ch.openSibling(service: string): Promise<NodeChannel>  // new DC on same PC
-ch.close(): void                       // close this DC only
+node.ping(): Promise<number>              // round-trip ms
+node.list(): Promise<string[]>           // service names
+node.verifyIdentity(): Promise<VerifyResult>
+node.connect(service: string): Promise<RTCDataChannel>  // open service, returns DC
+node.close(): void                        // close the peer connection
 ```
 
-## Node data channel protocol
+## Data channel protocol
 
-Before bridging, the data channel runs a text command loop:
+Each data channel starts in command mode. Commands:
 
 | Command | Response |
 |---|---|
@@ -94,4 +92,4 @@ Before bridging, the data channel runs a text command loop:
 | `list` | JSON array of service names |
 | `challenge <commitment_hex>` | `challenge-response <r_node_hex>` |
 | `verify <r_client_hex>` | `proof <pubkey_hex> <sig_hex>` |
-| `<service-name>` | `ok` (then raw TCP bytes) |
+| `connect <service>` | `ok` (then raw TCP bytes) |
