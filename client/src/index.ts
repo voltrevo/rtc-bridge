@@ -237,28 +237,29 @@ export class NodeChannel {
 
 // ── connect ────────────────────────────────────────────────────────────────────
 
-/**
- * Negotiate a WebRTC connection to a node via the coordinator and return
- * an open NodeChannel in command mode.
- */
-export async function connect(
+async function connectOnce(
   coordinator: Coordinator,
   nodeId: string,
   service: string,
-  config?: RTCConfiguration,
+  config: RTCConfiguration,
+  gatheringTimeoutMs: number,
 ): Promise<NodeChannel> {
-  const pc = new RTCPeerConnection(config ?? DEFAULT_CONFIG);
+  const pc = new RTCPeerConnection(config);
   const dc = pc.createDataChannel('proxy');
   dc.binaryType = 'arraybuffer';
 
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
 
-  // Wait for ICE gathering to complete before sending the offer.
+  // Wait for ICE gathering, up to gatheringTimeoutMs.
   await new Promise<void>((resolve) => {
     if (pc.iceGatheringState === 'complete') { resolve(); return; }
+    const timer = gatheringTimeoutMs < Infinity
+      ? setTimeout(resolve, gatheringTimeoutMs)
+      : null;
     pc.addEventListener('icegatheringstatechange', function check() {
       if (pc.iceGatheringState === 'complete') {
+        if (timer !== null) clearTimeout(timer);
         pc.removeEventListener('icegatheringstatechange', check);
         resolve();
       }
@@ -274,10 +275,32 @@ export async function connect(
     dc.addEventListener('open', () => resolve(), { once: true });
     pc.addEventListener('connectionstatechange', () => {
       if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+        pc.close();
         reject(new Error(`peer connection ${pc.connectionState}`));
       }
     });
   });
 
   return new NodeChannel(dc, pc, nodeId, service);
+}
+
+/**
+ * Negotiate a WebRTC connection to a node via the coordinator and return
+ * an open NodeChannel in command mode.
+ *
+ * First attempts with a 1s ICE gathering timeout (fast path). If that fails,
+ * retries with full ICE gathering (slow path, better NAT traversal).
+ */
+export async function connect(
+  coordinator: Coordinator,
+  nodeId: string,
+  service: string,
+  config?: RTCConfiguration,
+): Promise<NodeChannel> {
+  const cfg = config ?? DEFAULT_CONFIG;
+  try {
+    return await connectOnce(coordinator, nodeId, service, cfg, 1000);
+  } catch {
+    return await connectOnce(coordinator, nodeId, service, cfg, Infinity);
+  }
 }
