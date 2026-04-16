@@ -320,7 +320,7 @@ const landingHTML = `<!DOCTYPE html>
     Nodes dial in via <code>WebSocket</code> and authenticate with an ed25519 keypair,
     then register their TCP services. Browsers discover nodes via <a href="/nodes"><code>/nodes</code></a>
     or <a href="/services"><code>/services</code></a>, exchange SDP through <code>/offer</code>, and connect
-    directly over WebRTC — no public IP or open ports required on nodes.
+    directly over WebRTC — no domain/TLS required on nodes.
   </div>
 
   <table class="api-table">
