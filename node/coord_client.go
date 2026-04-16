@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	mrand "math/rand/v2"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -28,9 +29,12 @@ const (
 	backoffResetAfter = 30 * time.Second
 )
 
-// nextBackoff returns the next backoff delay given the current one.
+// nextBackoff returns the next backoff delay given the current one,
+// with ±20% jitter to desynchronise nodes that restart together.
 func nextBackoff(cur float64) float64 {
-	return cur * (1 + backoffK*(1-cur/backoffMax))
+	next := cur * (1 + backoffK*(1-cur/backoffMax))
+	jitter := 0.8 + 0.4*mrand.Float64() // uniform in [0.8, 1.2]
+	return next * jitter
 }
 
 // runCoordinator connects to a coordinator and handles offers indefinitely,
