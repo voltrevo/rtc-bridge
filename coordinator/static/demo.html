@@ -237,7 +237,7 @@
         card.innerHTML = `
           <div class="node-id">${n.nodeId}</div>
           <div class="row" style="gap:0.3rem"></div>`;
-        card.onclick = () => openNodePanel(n.nodeId, (n.services || [])[0]);
+        card.onclick = () => openNodePanel(n.nodeId);
         const chips = card.querySelector('.row');
         for (const svc of (n.services || [])) {
           const chip = document.createElement('span');
@@ -252,7 +252,7 @@
 
     // ── Panel creation ─────────────────────────────────────────────────────
     // Card click → new REPL panel. Service panels are nested children.
-    async function openNodePanel(nodeId, service) {
+    async function openNodePanel(nodeId) {
       const panel = document.createElement('div');
       panel.className = 'repl';
       const statusLabel = document.createElement('div');
@@ -269,7 +269,7 @@
 
       let ch;
       try {
-        ch = await connect(coordinator, nodeId, service);
+        ch = await connect(coordinator, nodeId);
       } catch(e) {
         result.textContent = String(e);
         result.className = 'result err';
@@ -361,10 +361,10 @@
       panel.appendChild(label);
       document.getElementById('panels').appendChild(panel);
 
-      let ch;
+      let ch, dc;
       try {
-        ch = await connect(coordinator, nodeId, svc);
-        await ch.bridge(svc);
+        ch = await connect(coordinator, nodeId);
+        dc = await ch.bridge(svc);
       } catch(e) {
         label.textContent = String(e);
         label.style.color = '#f85149';
@@ -376,7 +376,7 @@
         panel.appendChild(btn);
         return;
       }
-      addTerminal(ch, svc, label, panel, () => { ch.pc.close(); panel.remove(); });
+      addTerminal(dc, svc, label, panel, () => { ch.pc.close(); panel.remove(); });
     }
 
     // Service chip from REPL list → sibling DC on same PC, nested inside node panel.
@@ -390,10 +390,10 @@
       panel.appendChild(label);
       container.appendChild(panel);
 
-      let ch;
+      let sibCh, dc;
       try {
-        ch = await replCh.openSibling(svc);
-        await ch.bridge(svc);
+        sibCh = await replCh.openSibling(svc);
+        dc = await sibCh.bridge(svc);
       } catch(e) {
         label.textContent = String(e);
         label.style.color = '#f85149';
@@ -405,10 +405,10 @@
         panel.appendChild(btn);
         return;
       }
-      addTerminal(ch, svc, label, panel, () => { ch.close(); panel.remove(); });
+      addTerminal(dc, svc, label, panel, () => { sibCh.close(); panel.remove(); });
     }
 
-    function addTerminal(ch, svc, label, panel, onClose) {
+    function addTerminal(dc, svc, label, panel, onClose) {
       // Replace placeholder label with header row (label + close button)
       const header = document.createElement('div');
       header.className = 'panel-header';
@@ -439,7 +439,7 @@
         if (!text) return;
         input.value = '';
         panelLine(log, 'sent', text);
-        ch.dc.send(text + '\n');
+        dc.send(text + '\n');
       };
       sendBtn.onclick = doSend;
       input.addEventListener('keydown', e => { if (e.key === 'Enter') doSend(); });
@@ -447,11 +447,11 @@
 
       panel.appendChild(inputRow);
 
-      ch.dc.addEventListener('message', (e) => {
+      dc.addEventListener('message', (e) => {
         const text = typeof e.data === 'string' ? e.data : new TextDecoder().decode(e.data);
         panelLine(log, 'recv', text);
       });
-      ch.dc.addEventListener('close', () => panel.remove());
+      dc.addEventListener('close', () => panel.remove());
 
       panelLine(log, 'info', '— bridged —');
       input.focus();

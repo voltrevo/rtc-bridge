@@ -351,7 +351,7 @@ func (c *coordinator) handleServices(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(svcMap)
 }
 
-// POST /offer  body: {service, nodeId, offer}
+// POST /offer  body: {nodeId, offer}
 // Returns the answer from the node.
 func (c *coordinator) handleOffer(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -365,16 +365,15 @@ func (c *coordinator) handleOffer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Service string          `json:"service"`
-		NodeID  string          `json:"nodeId"`
-		Offer   json.RawMessage `json:"offer"`
+		NodeID string          `json:"nodeId"`
+		Offer  json.RawMessage `json:"offer"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		http.Error(w, "bad JSON: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if req.NodeID == "" || req.Service == "" || len(req.Offer) == 0 {
-		http.Error(w, "service, nodeId, and offer are required", http.StatusBadRequest)
+	if req.NodeID == "" || len(req.Offer) == 0 {
+		http.Error(w, "nodeId and offer are required", http.StatusBadRequest)
 		return
 	}
 
@@ -383,19 +382,6 @@ func (c *coordinator) handleOffer(w http.ResponseWriter, r *http.Request) {
 	c.mu.RUnlock()
 	if !ok {
 		http.Error(w, fmt.Sprintf("node %q not found", req.NodeID), http.StatusNotFound)
-		return
-	}
-
-	// Check node offers the requested service.
-	serviced := false
-	for _, s := range n.services {
-		if s == req.Service {
-			serviced = true
-			break
-		}
-	}
-	if !serviced {
-		http.Error(w, fmt.Sprintf("node %q does not offer service %q", req.NodeID, req.Service), http.StatusBadRequest)
 		return
 	}
 

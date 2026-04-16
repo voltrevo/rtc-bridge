@@ -67,13 +67,12 @@ export class Coordinator {
   /** @internal */
   async _sendOffer(
     nodeId: string,
-    service: string,
     offer: RTCSessionDescriptionInit,
   ): Promise<RTCSessionDescriptionInit> {
     const r = await fetch(`${this.base}/offer`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nodeId, service, offer }),
+      body: JSON.stringify({ nodeId, offer }),
     });
     if (!r.ok) throw new Error(`/offer: HTTP ${r.status} — ${await r.text()}`);
     return r.json() as Promise<RTCSessionDescriptionInit>;
@@ -90,13 +89,11 @@ export class NodeChannel {
   readonly dc: RTCDataChannel;
   readonly pc: RTCPeerConnection;
   private readonly _nodeId: string;
-  private readonly _service: string;
 
-  constructor(dc: RTCDataChannel, pc: RTCPeerConnection, nodeId: string, service: string) {
+  constructor(dc: RTCDataChannel, pc: RTCPeerConnection, nodeId: string) {
     this.dc = dc;
     this.pc = pc;
     this._nodeId = nodeId;
-    this._service = service;
   }
 
   private sendCmd(cmd: string, timeoutMs = 10_000): Promise<string> {
@@ -202,12 +199,12 @@ export class NodeChannel {
 
   /**
    * Send the service name over the command channel, switching it to TCP bridge mode.
-   * Omit service to use the one passed to connect().
+   * Returns the data channel, which is now a raw pipe to the TCP connection.
    */
-  async bridge(service?: string): Promise<void> {
-    const svc = service ?? this._service;
-    const resp = await this.sendCmd(svc);
+  async bridge(service: string): Promise<RTCDataChannel> {
+    const resp = await this.sendCmd(service);
     if (resp !== 'ok') throw new Error(`bridge failed: ${resp}`);
+    return this.dc;
   }
 
   /**
@@ -226,7 +223,7 @@ export class NodeChannel {
         }
       });
     });
-    return new NodeChannel(dc, this.pc, this._nodeId, service);
+    return new NodeChannel(dc, this.pc, this._nodeId);
   }
 
   /** Close this data channel only. Use pc.close() to tear down the whole connection. */
@@ -240,7 +237,6 @@ export class NodeChannel {
 async function connectOnce(
   coordinator: Coordinator,
   nodeId: string,
-  service: string,
   config: RTCConfiguration,
   gatheringTimeoutMs: number,
 ): Promise<NodeChannel> {
@@ -266,7 +262,7 @@ async function connectOnce(
     });
   });
 
-  const answer = await coordinator._sendOffer(nodeId, service, pc.localDescription!);
+  const answer = await coordinator._sendOffer(nodeId, pc.localDescription!);
   await pc.setRemoteDescription(answer);
 
   // Wait for the data channel to open.
@@ -281,7 +277,7 @@ async function connectOnce(
     });
   });
 
-  return new NodeChannel(dc, pc, nodeId, service);
+  return new NodeChannel(dc, pc, nodeId);
 }
 
 /**
@@ -294,13 +290,12 @@ async function connectOnce(
 export async function connect(
   coordinator: Coordinator,
   nodeId: string,
-  service: string,
   config?: RTCConfiguration,
 ): Promise<NodeChannel> {
   const cfg = config ?? DEFAULT_CONFIG;
   try {
-    return await connectOnce(coordinator, nodeId, service, cfg, 1000);
+    return await connectOnce(coordinator, nodeId, cfg, 1000);
   } catch {
-    return await connectOnce(coordinator, nodeId, service, cfg, Infinity);
+    return await connectOnce(coordinator, nodeId, cfg, Infinity);
   }
 }

@@ -21,7 +21,7 @@ const coordinator = new Coordinator('https://your-coordinator.example.com');
 const nodes = await coordinator.nodes();
 
 // Connect to a node (command mode)
-const ch = await connect(coordinator, nodes[0].nodeId, nodes[0].services[0]);
+const ch = await connect(coordinator, nodes[0].nodeId);
 
 // Ping
 const ms = await ch.ping();
@@ -33,9 +33,9 @@ const services = await ch.list();
 const result = await ch.verifyIdentity();
 if (result.ok) console.log('verified:', result.pubkey);
 
-// Bridge the data channel to a named TCP service
-await ch.bridge('myservice');
-// ch.dc is now a raw data channel piped to the TCP connection
+// Bridge to a named TCP service — returns the raw data channel
+const dc = await ch.bridge('myservice');
+// dc is now piped to the TCP connection
 
 // Open an additional service on the same peer connection (no re-signaling)
 const sib = await ch.openSibling('otherservice');
@@ -64,7 +64,6 @@ coordinator.services(): Promise<Record<string, string[]>>
 connect(
   coordinator: Coordinator,
   nodeId: string,
-  service: string,
   config?: RTCConfiguration,
 ): Promise<NodeChannel>
 ```
@@ -80,7 +79,7 @@ ch.pc   // RTCPeerConnection
 ch.ping(): Promise<number>              // round-trip ms
 ch.list(): Promise<string[]>           // service names
 ch.verifyIdentity(): Promise<VerifyResult>
-ch.bridge(service?: string): Promise<void>  // switch DC to TCP bridge mode
+ch.bridge(service: string): Promise<RTCDataChannel>  // switch to TCP bridge mode, returns DC
 ch.openSibling(service: string): Promise<NodeChannel>  // new DC on same PC
 ch.close(): void                       // close this DC only
 ```
