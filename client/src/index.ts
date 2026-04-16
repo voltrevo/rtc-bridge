@@ -79,39 +79,36 @@ export class Coordinator {
   }
 }
 
-// ── Node ───────────────────────────────────────────────────────────────────────
+// ── Channel ────────────────────────────────────────────────────────────────────
 
-const DEFAULT_CONFIG: RTCConfiguration = {
-  iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-};
-
-export class Node {
-  readonly pc: RTCPeerConnection;
-  private readonly _cmdDc: RTCDataChannel;
+export class Channel {
+  readonly dc: RTCDataChannel;
   private readonly _nodeId: string;
+  private _connected = false;
 
-  constructor(cmdDc: RTCDataChannel, pc: RTCPeerConnection, nodeId: string) {
-    this._cmdDc = cmdDc;
-    this.pc = pc;
+  constructor(dc: RTCDataChannel, nodeId: string) {
+    this.dc = dc;
     this._nodeId = nodeId;
   }
 
+  private checkCommandMode() {
+    if (this._connected) throw new Error('channel is in pipe mode — command methods unavailable');
+  }
+
   private sendCmd(cmd: string, timeoutMs = 10_000): Promise<string> {
+    this.checkCommandMode();
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        this._cmdDc.removeEventListener('message', handler);
+        this.dc.removeEventListener('message', handler);
         reject(new Error(`timeout waiting for response to: ${JSON.stringify(cmd)}`));
       }, timeoutMs);
       const handler = (e: MessageEvent) => {
         clearTimeout(timer);
-        this._cmdDc.removeEventListener('message', handler);
-        const text = typeof e.data === 'string'
-          ? e.data
-          : new TextDecoder().decode(e.data as ArrayBuffer);
-        resolve(text);
+        this.dc.removeEventListener('message', handler);
+        resolve(typeof e.data === 'string' ? e.data : new TextDecoder().decode(e.data as ArrayBuffer));
       };
-      this._cmdDc.addEventListener('message', handler);
-      this._cmdDc.send(cmd);
+      this.dc.addEventListener('message', handler);
+      this.dc.send(cmd);
     });
   }
 
@@ -128,6 +125,7 @@ export class Node {
   }
 
   async verifyIdentity(): Promise<VerifyResult> {
+    this.checkCommandMode();
     if (!crypto.subtle) {
       return { ok: false, message: 'crypto.subtle unavailable (requires HTTPS or localhost)' };
     }
@@ -198,11 +196,37 @@ export class Node {
   }
 
   /**
-   * Open a new data channel to the named service and return it ready for raw I/O.
-   * Sends `connect <service>` over the new DC; the node pipes it to TCP.
+   * Connect this channel to a named TCP service.
+   * Sends `connect <service>` and transitions the channel to pipe mode.
+   * After this call, command methods (ping, list, etc.) will throw.
+   * Use ch.dc to send and receive raw bytes.
    */
-  async connect(service: string): Promise<RTCDataChannel> {
-    const dc = this.pc.createDataChannel(service);
+  async connect(service: string): Promise<void> {
+    const resp = await this.sendCmd(`connect ${service}`);
+    if (resp !== 'ok') throw new Error(`connect failed: ${resp}`);
+    this._connected = true;
+  }
+
+  /** Close this data channel. */
+  close(): void {
+    this.dc.close();
+  }
+}
+
+// ── Node ───────────────────────────────────────────────────────────────────────
+
+export class Node {
+  readonly pc: RTCPeerConnection;
+  private readonly _nodeId: string;
+
+  constructor(pc: RTCPeerConnection, nodeId: string) {
+    this.pc = pc;
+    this._nodeId = nodeId;
+  }
+
+  /** Open a new data channel to this node in command mode. */
+  async createChannel(): Promise<Channel> {
+    const dc = this.pc.createDataChannel('ch');
     dc.binaryType = 'arraybuffer';
     await new Promise<void>((resolve, reject) => {
       if (dc.readyState === 'open') { resolve(); return; }
@@ -213,31 +237,20 @@ export class Node {
         }
       });
     });
-    // Switch the new DC into bridge mode.
-    const resp = await new Promise<string>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        dc.removeEventListener('message', handler);
-        reject(new Error('timeout waiting for connect response'));
-      }, 10_000);
-      const handler = (e: MessageEvent) => {
-        clearTimeout(timer);
-        dc.removeEventListener('message', handler);
-        resolve(typeof e.data === 'string' ? e.data : new TextDecoder().decode(e.data as ArrayBuffer));
-      };
-      dc.addEventListener('message', handler);
-      dc.send(`connect ${service}`);
-    });
-    if (resp !== 'ok') throw new Error(`connect failed: ${resp}`);
-    return dc;
+    return new Channel(dc, this._nodeId);
   }
 
-  /** Close the peer connection (drops all data channels). */
+  /** Close the peer connection (drops all channels). */
   close(): void {
     this.pc.close();
   }
 }
 
 // ── dial ───────────────────────────────────────────────────────────────────────
+
+const DEFAULT_CONFIG: RTCConfiguration = {
+  iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+};
 
 async function dialOnce(
   coordinator: Coordinator,
@@ -246,8 +259,9 @@ async function dialOnce(
   gatheringTimeoutMs: number,
 ): Promise<Node> {
   const pc = new RTCPeerConnection(config);
-  const cmdDc = pc.createDataChannel('cmd');
-  cmdDc.binaryType = 'arraybuffer';
+  // A data channel is required to generate an offer with SCTP.
+  const initDc = pc.createDataChannel('rtc-bridge');
+  initDc.binaryType = 'arraybuffer';
 
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
@@ -270,10 +284,10 @@ async function dialOnce(
   const answer = await coordinator._sendOffer(nodeId, pc.localDescription!);
   await pc.setRemoteDescription(answer);
 
-  // Wait for the command data channel to open.
+  // Wait for the init channel to open (confirms the PC is fully established).
   await new Promise<void>((resolve, reject) => {
-    if (cmdDc.readyState === 'open') { resolve(); return; }
-    cmdDc.addEventListener('open', () => resolve(), { once: true });
+    if (initDc.readyState === 'open') { resolve(); return; }
+    initDc.addEventListener('open', () => resolve(), { once: true });
     pc.addEventListener('connectionstatechange', () => {
       if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
         pc.close();
@@ -282,11 +296,12 @@ async function dialOnce(
     });
   });
 
-  return new Node(cmdDc, pc, nodeId);
+  return new Node(pc, nodeId);
 }
 
 /**
- * Dial a node via the coordinator and return a Node in command mode.
+ * Dial a node via the coordinator and return a connected Node.
+ * Use node.createChannel() to open data channels in command mode.
  *
  * First attempts with a 1s ICE gathering timeout (fast path). If that fails,
  * retries with full ICE gathering (slow path, better NAT traversal).

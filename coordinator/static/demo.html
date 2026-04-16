@@ -267,9 +267,10 @@
       panel.append(statusLabel, idEl, result);
       document.getElementById('panels').appendChild(panel);
 
-      let node;
+      let node, cmdCh;
       try {
         node = await dial(coordinator, nodeId);
+        cmdCh = await node.createChannel();
       } catch(e) {
         result.textContent = String(e);
         result.className = 'result err';
@@ -313,13 +314,13 @@
 
       mkBtn('Ping', '', async () => {
         setResult('…', '');
-        try { setResult(`pong  ${await node.ping()} ms`, 'ok'); }
+        try { setResult(`pong  ${await cmdCh.ping()} ms`, 'ok'); }
         catch(e) { setResult(String(e), 'err'); }
       });
       mkBtn('List services', '', async () => {
         setResult('…', '');
         try {
-          const svcs = await node.list();
+          const svcs = await cmdCh.list();
           setResult('', '');
           svcChips.innerHTML = '';
           for (const svc of svcs) {
@@ -334,7 +335,7 @@
       mkBtn('Verify node', '', async () => {
         setResult('Verifying…', '');
         try {
-          const r = await node.verifyIdentity();
+          const r = await cmdCh.verifyIdentity();
           setResult(r.ok ? `✓ verified  ${r.pubkey.slice(0,16)}…` : `✗ ${r.message}`, r.ok ? 'ok' : 'err');
         } catch(e) { setResult(String(e), 'err'); }
       });
@@ -359,10 +360,11 @@
       panel.appendChild(label);
       document.getElementById('panels').appendChild(panel);
 
-      let node, dc;
+      let node, ch;
       try {
         node = await dial(coordinator, nodeId);
-        dc = await node.connect(svc);
+        ch = await node.createChannel();
+        await ch.connect(svc);
       } catch(e) {
         label.textContent = String(e);
         label.style.color = '#f85149';
@@ -374,7 +376,7 @@
         panel.appendChild(btn);
         return;
       }
-      addTerminal(dc, svc, label, panel, () => { node.close(); panel.remove(); });
+      addTerminal(ch.dc, svc, label, panel, () => { node.close(); panel.remove(); });
     }
 
     // Service chip from REPL list → sibling DC on same PC, nested inside node panel.
@@ -388,9 +390,10 @@
       panel.appendChild(label);
       container.appendChild(panel);
 
-      let dc;
+      let ch;
       try {
-        dc = await node.connect(svc);
+        ch = await node.createChannel();
+        await ch.connect(svc);
       } catch(e) {
         label.textContent = String(e);
         label.style.color = '#f85149';
@@ -402,7 +405,7 @@
         panel.appendChild(btn);
         return;
       }
-      addTerminal(dc, svc, label, panel, () => { dc.close(); panel.remove(); });
+      addTerminal(ch.dc, svc, label, panel, () => { ch.close(); panel.remove(); });
     }
 
     function addTerminal(dc, svc, label, panel, onClose) {
