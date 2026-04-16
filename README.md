@@ -37,8 +37,9 @@ cd coordinator && ./coordinator init && ./coordinator run
 # Edit config.json5: add your service(s) and set the coordinator URL
 ./node/node run
 
-# 4. Open demo.html in a browser
-#    Enter the coordinator URL → fetch services → click a node → chat
+# 4. Open the demo in a browser (coordinator serves it at /)
+#    Enter the coordinator URL → Connect → click a node card → Ping / List services
+#    Click a service chip to open a bridged terminal panel (nested under the node)
 ```
 
 ## Node config (config.json5)
