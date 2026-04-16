@@ -153,8 +153,8 @@ func handleOffer(offer webrtc.SessionDescription, services map[string]string, id
 		dc.OnError(func(e error) { fmt.Printf("[dc] error: %v\n", e) })
 
 		dc.OnOpen(func() {
-			// Pre-connect command loop.
-			// Commands: ping, list, challenge <hex>, verify <hex>, <service-name>
+			// Command loop.
+			// Commands: ping, list, challenge <hex>, verify <hex>, connect <service>
 			var commitment []byte // sha256(r_client), set on "challenge"
 			var rNode []byte      // our random, set on "challenge"
 
@@ -218,9 +218,8 @@ func handleOffer(offer webrtc.SessionDescription, services map[string]string, id
 					commitment = nil
 					rNode = nil
 
-				default:
-					// Treat as service name.
-					svcName := text
+				case strings.HasPrefix(text, "connect "):
+					svcName := strings.TrimPrefix(text, "connect ")
 					target, exists := services[svcName]
 					if !exists {
 						dc.SendText(fmt.Sprintf("err: unknown service %q", svcName))
@@ -238,6 +237,9 @@ func handleOffer(offer webrtc.SessionDescription, services map[string]string, id
 					fmt.Printf("[dc] service %q → %s\n", svcName, target)
 					bridge(dc, conn, buf)
 					return
+
+				default:
+					dc.SendText(fmt.Sprintf("err: unknown command %q", text))
 				}
 			}
 		})

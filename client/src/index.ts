@@ -79,19 +79,19 @@ export class Coordinator {
   }
 }
 
-// ── NodeChannel ────────────────────────────────────────────────────────────────
+// ── Node ───────────────────────────────────────────────────────────────────────
 
 const DEFAULT_CONFIG: RTCConfiguration = {
   iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
 };
 
-export class NodeChannel {
-  readonly dc: RTCDataChannel;
+export class Node {
   readonly pc: RTCPeerConnection;
+  private readonly _cmdDc: RTCDataChannel;
   private readonly _nodeId: string;
 
-  constructor(dc: RTCDataChannel, pc: RTCPeerConnection, nodeId: string) {
-    this.dc = dc;
+  constructor(cmdDc: RTCDataChannel, pc: RTCPeerConnection, nodeId: string) {
+    this._cmdDc = cmdDc;
     this.pc = pc;
     this._nodeId = nodeId;
   }
@@ -99,19 +99,19 @@ export class NodeChannel {
   private sendCmd(cmd: string, timeoutMs = 10_000): Promise<string> {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        this.dc.removeEventListener('message', handler);
+        this._cmdDc.removeEventListener('message', handler);
         reject(new Error(`timeout waiting for response to: ${JSON.stringify(cmd)}`));
       }, timeoutMs);
       const handler = (e: MessageEvent) => {
         clearTimeout(timer);
-        this.dc.removeEventListener('message', handler);
+        this._cmdDc.removeEventListener('message', handler);
         const text = typeof e.data === 'string'
           ? e.data
           : new TextDecoder().decode(e.data as ArrayBuffer);
         resolve(text);
       };
-      this.dc.addEventListener('message', handler);
-      this.dc.send(cmd);
+      this._cmdDc.addEventListener('message', handler);
+      this._cmdDc.send(cmd);
     });
   }
 
@@ -198,20 +198,10 @@ export class NodeChannel {
   }
 
   /**
-   * Send the service name over the command channel, switching it to TCP bridge mode.
-   * Returns the data channel, which is now a raw pipe to the TCP connection.
+   * Open a new data channel to the named service and return it ready for raw I/O.
+   * Sends `connect <service>` over the new DC; the node pipes it to TCP.
    */
-  async bridge(service: string): Promise<RTCDataChannel> {
-    const resp = await this.sendCmd(service);
-    if (resp !== 'ok') throw new Error(`bridge failed: ${resp}`);
-    return this.dc;
-  }
-
-  /**
-   * Open a new data channel on the same peer connection (no re-signaling needed).
-   * Use this to add service bridges to an existing node connection.
-   */
-  async openSibling(service: string): Promise<NodeChannel> {
+  async connect(service: string): Promise<RTCDataChannel> {
     const dc = this.pc.createDataChannel(service);
     dc.binaryType = 'arraybuffer';
     await new Promise<void>((resolve, reject) => {
@@ -223,26 +213,41 @@ export class NodeChannel {
         }
       });
     });
-    return new NodeChannel(dc, this.pc, this._nodeId);
+    // Switch the new DC into bridge mode.
+    const resp = await new Promise<string>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        dc.removeEventListener('message', handler);
+        reject(new Error('timeout waiting for connect response'));
+      }, 10_000);
+      const handler = (e: MessageEvent) => {
+        clearTimeout(timer);
+        dc.removeEventListener('message', handler);
+        resolve(typeof e.data === 'string' ? e.data : new TextDecoder().decode(e.data as ArrayBuffer));
+      };
+      dc.addEventListener('message', handler);
+      dc.send(`connect ${service}`);
+    });
+    if (resp !== 'ok') throw new Error(`connect failed: ${resp}`);
+    return dc;
   }
 
-  /** Close this data channel only. Use pc.close() to tear down the whole connection. */
+  /** Close the peer connection (drops all data channels). */
   close(): void {
-    this.dc.close();
+    this.pc.close();
   }
 }
 
-// ── connect ────────────────────────────────────────────────────────────────────
+// ── dial ───────────────────────────────────────────────────────────────────────
 
-async function connectOnce(
+async function dialOnce(
   coordinator: Coordinator,
   nodeId: string,
   config: RTCConfiguration,
   gatheringTimeoutMs: number,
-): Promise<NodeChannel> {
+): Promise<Node> {
   const pc = new RTCPeerConnection(config);
-  const dc = pc.createDataChannel('proxy');
-  dc.binaryType = 'arraybuffer';
+  const cmdDc = pc.createDataChannel('cmd');
+  cmdDc.binaryType = 'arraybuffer';
 
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
@@ -265,10 +270,10 @@ async function connectOnce(
   const answer = await coordinator._sendOffer(nodeId, pc.localDescription!);
   await pc.setRemoteDescription(answer);
 
-  // Wait for the data channel to open.
+  // Wait for the command data channel to open.
   await new Promise<void>((resolve, reject) => {
-    if (dc.readyState === 'open') { resolve(); return; }
-    dc.addEventListener('open', () => resolve(), { once: true });
+    if (cmdDc.readyState === 'open') { resolve(); return; }
+    cmdDc.addEventListener('open', () => resolve(), { once: true });
     pc.addEventListener('connectionstatechange', () => {
       if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
         pc.close();
@@ -277,25 +282,24 @@ async function connectOnce(
     });
   });
 
-  return new NodeChannel(dc, pc, nodeId);
+  return new Node(cmdDc, pc, nodeId);
 }
 
 /**
- * Negotiate a WebRTC connection to a node via the coordinator and return
- * an open NodeChannel in command mode.
+ * Dial a node via the coordinator and return a Node in command mode.
  *
  * First attempts with a 1s ICE gathering timeout (fast path). If that fails,
  * retries with full ICE gathering (slow path, better NAT traversal).
  */
-export async function connect(
+export async function dial(
   coordinator: Coordinator,
   nodeId: string,
   config?: RTCConfiguration,
-): Promise<NodeChannel> {
+): Promise<Node> {
   const cfg = config ?? DEFAULT_CONFIG;
   try {
-    return await connectOnce(coordinator, nodeId, cfg, 1000);
+    return await dialOnce(coordinator, nodeId, cfg, 1000);
   } catch {
-    return await connectOnce(coordinator, nodeId, cfg, Infinity);
+    return await dialOnce(coordinator, nodeId, cfg, Infinity);
   }
 }
